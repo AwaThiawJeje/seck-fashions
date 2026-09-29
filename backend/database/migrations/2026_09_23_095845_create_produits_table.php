@@ -15,6 +15,7 @@ return new class extends Migration
             $table->string('slug')->unique();
             $table->text('description')->nullable();
             $table->decimal('prix', 10, 2); // FCFA
+            $table->decimal('prix_promo', 10, 2)->nullable(); // prix barré actif si renseigné
             $table->integer('quantite')->default(0);
             $table->boolean('disponible')->default(true);
             $table->string('reference')->nullable()->unique();

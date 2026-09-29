@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 
 class Produit extends Model
 {
@@ -15,16 +16,20 @@ class Produit extends Model
         'slug',
         'description',
         'prix',
+        'prix_promo',
         'quantite',
         'disponible',
         'reference',
         'mis_en_avant',
     ];
 
+    protected $appends = ['en_promotion', 'pourcentage_reduction'];
+
     protected $casts = [
         'disponible' => 'boolean',
         'mis_en_avant' => 'boolean',
         'prix' => 'decimal:2',
+        'prix_promo' => 'decimal:2',
     ];
 
     public function categorie()
@@ -51,5 +56,25 @@ class Produit extends Model
     {
         return Commande::where('statut', 'en_attente')
             ->whereHas('lignes', fn ($q) => $q->where('produit_id', $this->id));
+    }
+
+    protected function enPromotion(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => $this->prix_promo !== null && (float) $this->prix_promo < (float) $this->prix,
+        );
+    }
+
+    protected function pourcentageReduction(): Attribute
+    {
+        return Attribute::make(
+            get: function () {
+                if (! $this->en_promotion) {
+                    return null;
+                }
+
+                return (int) round((1 - ((float) $this->prix_promo / (float) $this->prix)) * 100);
+            },
+        );
     }
 }

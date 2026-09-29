@@ -101,7 +101,8 @@ class CommandeController extends Controller
                     abort(422, "Stock insuffisant pour \"{$produit->nom}\" — il n'en reste que {$produit->quantite}.");
                 }
 
-                $sousTotal = $produit->prix * $article['quantite'];
+                $prixUnitaire = $produit->en_promotion ? $produit->prix_promo : $produit->prix;
+                $sousTotal = $prixUnitaire * $article['quantite'];
                 $total += $sousTotal;
 
                 $lignes[] = [
@@ -109,7 +110,7 @@ class CommandeController extends Controller
                     'declinaison_id' => $declinaison?->id,
                     'declinaison_valeur' => $declinaison?->valeur,
                     'nom_produit' => $nomLigne,
-                    'prix_unitaire' => $produit->prix,
+                    'prix_unitaire' => $prixUnitaire,
                     'quantite' => $article['quantite'],
                     'sous_total' => $sousTotal,
                 ];

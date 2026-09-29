@@ -137,6 +137,22 @@ class ProduitController extends Controller
             'nom' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'prix' => ['required', 'numeric', 'min:0'],
+            'prix_promo' => [
+                'nullable', 'numeric', 'min:0',
+                function ($attribute, $value, $fail) use ($request) {
+                    if ($value !== null && (float) $value >= (float) $request->input('prix')) {
+                        $fail('Le prix promotionnel doit être inférieur au prix normal.');
+                    }
+                },
+            ],
+            'reduction_pourcentage' => [
+                'nullable', 'numeric', 'min:1', 'max:99',
+                function ($attribute, $value, $fail) use ($request) {
+                    if ($value !== null && $request->filled('prix_promo')) {
+                        $fail('Indique soit un prix promotionnel, soit un pourcentage de réduction, pas les deux.');
+                    }
+                },
+            ],
             'quantite' => ['nullable', 'integer', 'min:0'],
             'disponible' => ['boolean'],
             'reference' => [
@@ -155,6 +171,11 @@ class ProduitController extends Controller
             'prix.required' => 'Le prix est obligatoire.',
             'prix.numeric' => 'Le prix doit être un nombre valide (décimales autorisées).',
             'prix.min' => 'Le prix ne peut pas être négatif.',
+            'prix_promo.numeric' => 'Le prix promotionnel doit être un nombre valide.',
+            'prix_promo.min' => 'Le prix promotionnel ne peut pas être négatif.',
+            'reduction_pourcentage.numeric' => 'Le pourcentage de réduction doit être un nombre.',
+            'reduction_pourcentage.min' => 'Le pourcentage de réduction doit être entre 1 et 99.',
+            'reduction_pourcentage.max' => 'Le pourcentage de réduction doit être entre 1 et 99.',
             'quantite.integer' => 'La quantité doit être un nombre entier.',
             'quantite.min' => 'La quantité ne peut pas être négative.',
             'reference.unique' => 'Cette référence est déjà utilisée par un autre produit.',
@@ -164,9 +185,14 @@ class ProduitController extends Controller
             'declinaisons.*.quantite.min' => 'La quantité de la déclinaison :position ne peut pas être négative.',
         ]);
 
+        // Un pourcentage envoyé se convertit en prix promo — seul prix_promo est stocké
+        if (! empty($data['reduction_pourcentage'])) {
+            $data['prix_promo'] = round($data['prix'] * (1 - $data['reduction_pourcentage'] / 100), 2);
+        }
+        unset($data['reduction_pourcentage']);
+
         $data['slug'] = Str::slug($data['nom']);
 
-        // Si ce slug existe déjà (deux produits avec le même nom), on ajoute un suffixe
         $slugDeBase = $data['slug'];
         $compteur = 1;
         while (

@@ -1,28 +1,28 @@
 import { useState } from "react";
-import type { Product } from "../data/products";
+import type { Produit } from "../types/api";
 
 type ProductCardProps = {
-    product: Product;
+    product: Produit;
     isFavorite?: boolean;
-    onToggleFavorite?: (id: string) => void;
-    onAddToCart?: (id: string) => void;
+    onToggleFavorite?: (id: number) => void;
+    onAddToCart?: (id: number) => void;
     href?: string;
 };
 
-const LOW_STOCK_THRESHOLD = 10;
-const CRITICAL_STOCK_THRESHOLD = 3;
-
-function formatPrice(value: number) {
-    return `${value.toLocaleString("fr-FR")} FCFA`;
+function formatPrice(value: string) {
+    return `${Number(value).toLocaleString("fr-FR")} FCFA`;
 }
 
-function getStockStatus(product: Product): "out" | "critical" | "low" | "normal" {
-    if (!product.available || product.quantity === 0) return "out";
-    if (product.quantity !== undefined) {
-        if (product.quantity <= CRITICAL_STOCK_THRESHOLD) return "critical";
-        if (product.quantity <= LOW_STOCK_THRESHOLD) return "low";
+function getStockTotal(product: Produit): number {
+    if (product.declinaisons && product.declinaisons.length > 0) {
+        return product.declinaisons.reduce((sum, d) => sum + d.quantite, 0);
     }
-    return "normal";
+    return product.quantite;
+}
+
+function isOutOfStock(product: Produit): boolean {
+    if (!product.disponible) return true;
+    return getStockTotal(product) === 0;
 }
 
 export default function ProductCard({
@@ -34,9 +34,12 @@ export default function ProductCard({
 }: ProductCardProps) {
     const [favorite, setFavorite] = useState(isFavorite);
     const [imgIndex, setImgIndex] = useState(0);
-    const status = getStockStatus(product);
-    const isOut = status === "out";
-    const hasMultipleImages = product.images.length > 1;
+    const isOut = isOutOfStock(product);
+
+    const imageUrls = product.images && product.images.length > 0
+        ? product.images.map((img) => img.url)
+        : [];
+    const hasMultipleImages = imageUrls.length > 1;
 
     const toggleFavorite = () => {
         setFavorite((v) => !v);
@@ -44,31 +47,32 @@ export default function ProductCard({
     };
 
     const goTo = (index: number) => {
-        const total = product.images.length;
+        const total = imageUrls.length;
         setImgIndex(((index % total) + total) % total);
     };
 
     return (
         <div className="group relative flex w-full flex-col overflow-hidden rounded-md border border-neutral-200 bg-white transition-colors hover:border-black">
-            {/* Image + carrousel */}
             <a href={href} className="relative block aspect-square w-full overflow-hidden bg-neutral-100">
-                <img
-                    src={product.images[imgIndex]}
-                    alt={product.name}
-                    className={`h-full w-full object-cover transition-transform duration-300 group-hover:scale-105 ${
-                        isOut ? "grayscale" : ""
-                    }`}
-                />
+                {imageUrls.length > 0 ? (
+                    <img
+                        src={imageUrls[imgIndex]}
+                        alt={product.nom}
+                        className={`h-full w-full object-cover transition-transform duration-300 group-hover:scale-105 ${
+                            isOut ? "grayscale" : ""
+                        }`}
+                    />
+                ) : (
+                    <div className="flex h-full w-full items-center justify-center">
+                        <ImagePlaceholderIcon />
+                    </div>
+                )}
 
-                {/* Flèches de navigation — visibles seulement si plusieurs photos */}
                 {hasMultipleImages && (
                     <>
                         <button
                             type="button"
-                            onClick={(e) => {
-                                e.preventDefault();
-                                goTo(imgIndex - 1);
-                            }}
+                            onClick={(e) => { e.preventDefault(); goTo(imgIndex - 1); }}
                             aria-label="Photo précédente"
                             className="absolute left-1 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full bg-white/80 text-black opacity-0 transition-opacity hover:bg-white group-hover:opacity-100"
                         >
@@ -76,41 +80,32 @@ export default function ProductCard({
                         </button>
                         <button
                             type="button"
-                            onClick={(e) => {
-                                e.preventDefault();
-                                goTo(imgIndex + 1);
-                            }}
+                            onClick={(e) => { e.preventDefault(); goTo(imgIndex + 1); }}
                             aria-label="Photo suivante"
                             className="absolute right-1 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full bg-white/80 text-black opacity-0 transition-opacity hover:bg-white group-hover:opacity-100"
                         >
                             <ChevronIcon direction="right" />
                         </button>
 
-                        {/* Points indicateurs */}
                         <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 gap-1">
-                            {product.images.map((_, i) => (
+                            {imageUrls.map((_, i) => (
                                 <span
                                     key={i}
-                                    className={`h-1.5 w-1.5 rounded-full ${
-                                        i === imgIndex ? "bg-white" : "bg-white/50"
-                                    }`}
+                                    className={`h-1.5 w-1.5 rounded-full ${i === imgIndex ? "bg-white" : "bg-white/50"}`}
                                 />
                             ))}
                         </div>
                     </>
                 )}
 
-                {/* Badge stock */}
-                {status === "critical" && (
-                    <span className="absolute left-2 top-2 rounded-sm bg-amber-500 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-black">
-                        Bientôt en rupture
-                    </span>
+                {product.en_promotion && (
+                    <div className="absolute left-2 top-2">
+                        <span className="rounded bg-orange-100 px-2 py-1 text-[10px] font-bold text-orange-600">
+                            -{product.pourcentage_reduction}%
+                        </span>
+                    </div>
                 )}
-                {status === "low" && (
-                    <span className="absolute left-2 top-2 rounded-sm bg-neutral-800 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-white">
-                        Quelques articles restants
-                    </span>
-                )}
+
                 {isOut && (
                     <div className="absolute inset-0 flex items-center justify-center bg-black/40">
                         <span className="rounded-sm bg-black px-3 py-1 text-xs font-bold uppercase tracking-wide text-white">
@@ -119,13 +114,9 @@ export default function ProductCard({
                     </div>
                 )}
 
-                {/* Favori */}
                 <button
                     type="button"
-                    onClick={(e) => {
-                        e.preventDefault();
-                        toggleFavorite();
-                    }}
+                    onClick={(e) => { e.preventDefault(); toggleFavorite(); }}
                     aria-label={favorite ? "Retirer des favoris" : "Ajouter aux favoris"}
                     aria-pressed={favorite}
                     className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-sm bg-white/90 text-black shadow-sm transition-colors hover:bg-white"
@@ -134,18 +125,21 @@ export default function ProductCard({
                 </button>
             </a>
 
-            {/* Infos produit */}
             <div className="flex flex-1 flex-col gap-1.5 p-3">
-                
-                <a    href={href}
-                    className="line-clamp-2 text-xs font-semibold uppercase tracking-wide text-neutral-800 hover:underline"
-                >
-                    {product.name}
+                <a href={href} className="line-clamp-2 text-xs font-semibold uppercase tracking-wide text-neutral-800 hover:underline">
+                    {product.nom}
                 </a>
 
-                <span className="text-base font-bold text-black">
-                    {formatPrice(product.price)}
-                </span>
+                <div className="flex items-baseline gap-2">
+                    {product.en_promotion ? (
+                        <>
+                            <span className="text-base font-bold text-black">{formatPrice(product.prix_promo!)}</span>
+                            <span className="text-xs text-neutral-400 line-through">{formatPrice(product.prix)}</span>
+                        </>
+                    ) : (
+                        <span className="text-base font-bold text-black">{formatPrice(product.prix)}</span>
+                    )}
+                </div>
 
                 <button
                     type="button"
@@ -161,7 +155,16 @@ export default function ProductCard({
     );
 }
 
-/* ---------- Icônes ---------- */
+function ImagePlaceholderIcon() {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"
+            strokeLinecap="round" strokeLinejoin="round" className="h-10 w-10 text-neutral-300">
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <circle cx="8.5" cy="8.5" r="1.5" />
+            <path d="M21 15l-5-5L5 21" />
+        </svg>
+    );
+}
 
 function HeartIcon({ filled }: { filled: boolean }) {
     return (

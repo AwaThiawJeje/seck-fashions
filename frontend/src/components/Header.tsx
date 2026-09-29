@@ -27,7 +27,7 @@ export default function Header({
     };
 
     return (
-        <header className="w-full bg-black text-white">
+        <header className="sticky top-0 z-50 w-full bg-black text-white">
             <div className="mx-auto flex h-16 max-w-7xl items-center gap-4 px-4 sm:px-6">
                 {/* Bouton retour — mobile, fiche produit uniquement */}
                 {variant === "product" && (
