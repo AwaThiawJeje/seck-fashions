@@ -4,6 +4,7 @@ export interface Categorie {
     slug: string;
     categorie_parente_id: number | null;
     enfants?: Categorie[];
+    parente?: Categorie;
 }
 
 export interface Declinaison {
@@ -93,4 +94,11 @@ export interface Commande {
     lignes?: LigneCommande[];
     livraison?: Livraison | null;
     user?: User | null;
+}
+
+export interface Favori {
+  id: number;
+  user_id: number;
+  produit_id: number;
+  produit: Produit;
 }

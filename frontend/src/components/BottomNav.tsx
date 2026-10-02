@@ -8,7 +8,7 @@ type BottomNavProps = {
     cartCount?: number;
 };
 
-export default function BottomNav({ active = "accueil", favoritesCount = 0, cartCount = 0 }: BottomNavProps) {
+export default function BottomNav({ active, favoritesCount = 0, cartCount = 0 }: BottomNavProps) {
     const items: { key: NavKey; href: string; label: string; icon: React.ReactNode; count?: number }[] = [
         { key: "accueil", href: "/", label: "Accueil", icon: <HomeIcon /> },
         { key: "categories", href: "/categories/chaussures", label: "Catégories", icon: <CategoryIcon /> },

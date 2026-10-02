@@ -1,16 +1,29 @@
-import { useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import CategorySidebar from "../components/CategorySideBar";
 import ProductCard from "../components/ProductCard";
 import { useProduits } from "../hooks/useProduits";
-import { useCategories } from "../hooks/useCategories";
+import { useCategories } from "../context/CategoriesContext";
 
 export default function CategoryPage() {
     const { slug = "" } = useParams<{ slug: string }>();
     const [query, setQuery] = useState("");
+    const navigate = useNavigate();
+
+    const { categories } = useCategories();
+
+    // Une catégorie parente (ex. "Chaussures") n'a jamais de produit directement
+    // rattaché — seuls ses enfants ("Sneakers", "Sandales"...) en ont. Si on atterrit
+    // dessus (lien header, sidebar...), on ouvre automatiquement son premier enfant
+    // pour ne jamais tomber sur une grille vide par défaut.
+    useEffect(() => {
+        const racine = categories.find((c) => c.slug === slug);
+        if (racine?.enfants && racine.enfants.length > 0) {
+            navigate(`/categories/${racine.enfants[0].slug}`, { replace: true });
+        }
+    }, [categories, slug, navigate]);
 
     const { produits, loading, error } = useProduits({ categorie: slug });
-    const { categories } = useCategories();
 
     const categoryLabel = useMemo(() => {
         for (const racine of categories) {
@@ -63,7 +76,6 @@ export default function CategoryPage() {
                                 key={produit.id}
                                 product={produit}
                                 href={`/produit/${produit.slug}`}
-                                onAddToCart={(id) => console.log("Ajouté :", id)}
                             />
                         ))}
                     </div>

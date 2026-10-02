@@ -77,4 +77,18 @@ class Produit extends Model
             },
         );
     }
+
+    public function getRouteKeyName(): string
+    {
+        return 'slug';
+    }
+
+    public function scopeEnVente($query)
+    {
+        return $query->where('disponible', true)->where(function ($q) {
+            $q->where(function ($q2) {
+                $q2->whereDoesntHave('declinaisons')->where('quantite', '>', 0);
+            })->orWhereHas('declinaisons', fn ($dq) => $dq->where('quantite', '>', 0));
+        });
+    }
 }

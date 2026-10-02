@@ -1,6 +1,5 @@
-/* ---------- Header.tsx ---------- */
-import { useState } from "react";
 import { Link } from "react-router-dom";
+import SearchBar from "./SearchBar";
 
 type HeaderVariant = "default" | "product";
 
@@ -8,7 +7,6 @@ type HeaderProps = {
     variant?: HeaderVariant;
     favoritesCount?: number;
     cartCount?: number;
-    onSearch?: (query: string) => void;
     onBack?: () => void;
 };
 
@@ -16,40 +14,29 @@ export default function Header({
     variant = "default",
     favoritesCount = 0,
     cartCount = 0,
-    onSearch,
     onBack,
 }: HeaderProps) {
-    const [query, setQuery] = useState("");
-
-    const submit = () => {
-        const q = query.trim();
-        if (q) onSearch?.(q);
-    };
-
     return (
         <header className="sticky top-0 z-50 w-full bg-black text-white">
             <div className="mx-auto flex h-16 max-w-7xl items-center gap-4 px-4 sm:px-6">
-                {/* Bouton retour — mobile, fiche produit uniquement */}
                 {variant === "product" && (
                     <button
-                    type="button"
-                    onClick={onBack}
-                    aria-label="Retour"
-                    className="-ml-2 rounded-full p-2 transition-colors hover:bg-white/10 md:hidden"
+                        type="button"
+                        onClick={onBack}
+                        aria-label="Retour"
+                        className="-ml-2 rounded-full p-2 transition-colors hover:bg-white/10 md:hidden"
                     >
-                    <BackIcon />
+                        <BackIcon />
                     </button>
                 )}
 
-                {/* Nom de l'entreprise */}
-                <a 
+                <a
                     href="/"
                     className="shrink-0 text-base font-bold tracking-[0.2em] sm:text-2xl sm:tracking-[0.25em]"
                 >
                     SECK FASHIONS
                 </a>
 
-                {/* Centre — desktop : Accueil, Catégories, recherche */}
                 <div className="hidden flex-1 items-center justify-center gap-6 md:flex">
                     <nav className="flex shrink-0 items-center gap-5 text-sm font-medium text-white/90">
                         <Link to="/" className="transition-colors hover:text-white">
@@ -60,22 +47,15 @@ export default function Header({
                         </Link>
                     </nav>
 
-                    <SearchBar
-                        query={query}
-                        setQuery={setQuery}
-                        submit={submit}
-                        className="max-w-md"
-                    />
+                    <SearchBar className="max-w-md" />
                 </div>
 
-                {/* Mobile — recherche seule (variant default) */}
                 {variant === "default" && (
                     <div className="ml-auto mr-1 shrink-0 md:hidden">
-    <SearchBar query={query} setQuery={setQuery} submit={submit} />
-</div>
+                        <SearchBar className="w-28 sm:w-60" />
+                    </div>
                 )}
 
-                {/* Droite : favoris + panier — desktop uniquement */}
                 <div className="ml-auto hidden items-center gap-1 md:flex">
                     <IconLink
                         href="/favoris"
@@ -94,7 +74,6 @@ export default function Header({
                     </IconLink>
                 </div>
 
-                {/* Mobile — panier seul, fiche produit uniquement */}
                 {variant === "product" && (
                     <div className="ml-auto md:hidden">
                         <IconLink
@@ -110,43 +89,6 @@ export default function Header({
         </header>
     );
 }
-
-/* ---------- Recherche ---------- */
-
-type SearchBarProps = {
-    query: string;
-    setQuery: (v: string) => void;
-    submit: () => void;
-    className?: string;
-};
-
-function SearchBar({ query, setQuery, submit, className = "" }: SearchBarProps) {
-    return (
-        <div className={`flex w-28 items-center gap-1.5 rounded-lg bg-white pl-3 pr-1 py-1 sm:gap-2 sm:pl-5 sm:pr-1.5 sm:py-1.5 sm:w-60 md:w-60 lg:w-96 ${className}`}>
-            <input
-                type="text"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => {
-                if (e.key === "Enter") submit();
-                }}
-                placeholder="Rechercher un article"
-                aria-label="Rechercher un article"
-                className="w-full bg-transparent pl-1.2 text-xs text-black placeholder:text-neutral-500 focus:outline-none sm:pl-2 sm:text-sm"
-            />
-            <button
-                type="button"
-                onClick={submit}
-                aria-label="Lancer la recherche"
-                className="flex h-7 w-9 shrink-0 items-center justify-center rounded-md bg-black text-white transition-colors hover:bg-neutral-800 sm:h-9 sm:w-11 sm:rounded-lg"
-            >
-                <SearchIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-            </button>
-        </div>
-    );
-}
-
-/* ---------- Icônes ---------- */
 
 function IconLink({
     href,
@@ -171,16 +113,6 @@ function IconLink({
                 </span>
             )}
         </a>
-    );
-}
-
-function SearchIcon({ className = "h-5 w-5" }: { className?: string }) {
-    return (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-            strokeLinecap="round" className={className}>
-        <circle cx="11" cy="11" r="7" />
-        <path d="m20 20-3.5-3.5" />
-        </svg>
     );
 }
 

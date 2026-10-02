@@ -15,7 +15,6 @@ export default function ProductGrid() {
                     key={produit.id}
                     product={produit}
                     href={`/produit/${produit.slug}`}
-                    onAddToCart={(id) => console.log("Ajouté :", id)}
                 />
             ))}
         </div>

@@ -1,12 +1,15 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import type { Produit } from "../types/api";
+import { useFavoris } from "../context/FavorisContext";
+import { usePanier } from "../context/PanierContext";
+import Modal from "./Modal";
 
 type ProductCardProps = {
     product: Produit;
-    isFavorite?: boolean;
-    onToggleFavorite?: (id: number) => void;
-    onAddToCart?: (id: number) => void;
     href?: string;
+    /** Demande confirmation avant de retirer ce produit des favoris (utilisé sur la page Favoris). */
+    confirmerRetraitFavori?: boolean;
 };
 
 function formatPrice(value: string) {
@@ -25,30 +28,44 @@ function isOutOfStock(product: Produit): boolean {
     return getStockTotal(product) === 0;
 }
 
-export default function ProductCard({
-    product,
-    isFavorite = false,
-    onToggleFavorite,
-    onAddToCart,
-    href = "#",
-}: ProductCardProps) {
-    const [favorite, setFavorite] = useState(isFavorite);
+export default function ProductCard({ product, href = "#", confirmerRetraitFavori = false }: ProductCardProps) {
+    const { estFavori, toggleFavori } = useFavoris();
+    const { ajouterLigne } = usePanier();
+    const navigate = useNavigate();
     const [imgIndex, setImgIndex] = useState(0);
     const isOut = isOutOfStock(product);
+    const favori = estFavori(product.id);
+    const aDesDeclinaisons = !!product.declinaisons && product.declinaisons.length > 0;
+    const [venantAjoute, setVenantAjoute] = useState(false);
+    const [confirmationOuverte, setConfirmationOuverte] = useState(false);
+
+    useEffect(() => {
+        if (!venantAjoute) return;
+        const timer = setTimeout(() => setVenantAjoute(false), 1500);
+        return () => clearTimeout(timer);
+    }, [venantAjoute]);
 
     const imageUrls = product.images && product.images.length > 0
         ? product.images.map((img) => img.url)
         : [];
     const hasMultipleImages = imageUrls.length > 1;
 
-    const toggleFavorite = () => {
-        setFavorite((v) => !v);
-        onToggleFavorite?.(product.id);
-    };
-
     const goTo = (index: number) => {
         const total = imageUrls.length;
         setImgIndex(((index % total) + total) % total);
+    };
+
+    const gererAjoutPanier = (e: React.MouseEvent) => {
+        e.preventDefault();
+        if (isOut) return;
+
+        if (aDesDeclinaisons) {
+            navigate(href);
+            return;
+        }
+
+        ajouterLigne(product, null, 1);
+        setVenantAjoute(true);
     };
 
     return (
@@ -116,14 +133,46 @@ export default function ProductCard({
 
                 <button
                     type="button"
-                    onClick={(e) => { e.preventDefault(); toggleFavorite(); }}
-                    aria-label={favorite ? "Retirer des favoris" : "Ajouter aux favoris"}
-                    aria-pressed={favorite}
+                    onClick={(e) => {
+                        e.preventDefault();
+                        if (favori && confirmerRetraitFavori) {
+                            setConfirmationOuverte(true);
+                        } else {
+                            toggleFavori(product);
+                        }
+                    }}
+                    aria-label={favori ? "Retirer des favoris" : "Ajouter aux favoris"}
+                    aria-pressed={favori}
                     className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-sm bg-white/90 text-black shadow-sm transition-colors hover:bg-white"
                 >
-                    <HeartIcon filled={favorite} />
+                    <HeartIcon filled={favori} />
                 </button>
             </a>
+
+            <Modal open={confirmationOuverte} onClose={() => setConfirmationOuverte(false)}>
+                <p className="mb-4 text-sm text-neutral-800">
+                    Retirer <span className="font-semibold">{product.nom}</span> de tes favoris ?
+                </p>
+                <div className="flex justify-end gap-2">
+                    <button
+                        type="button"
+                        onClick={() => {
+                            toggleFavori(product);
+                            setConfirmationOuverte(false);
+                        }}
+                        className="rounded-sm border border-black bg-white px-3 py-1.5 text-xs font-semibold text-black transition-colors hover:bg-neutral-50"
+                    >
+                        Retirer
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setConfirmationOuverte(false)}
+                        className="rounded-sm border border-orange-300 bg-orange-50 px-3 py-1.5 text-xs font-semibold text-orange-700 transition-colors hover:bg-orange-100"
+                    >
+                        Annuler
+                    </button>
+                </div>
+            </Modal>
 
             <div className="flex flex-1 flex-col gap-1.5 p-3">
                 <a href={href} className="line-clamp-2 text-xs font-semibold uppercase tracking-wide text-neutral-800 hover:underline">
@@ -143,12 +192,14 @@ export default function ProductCard({
 
                 <button
                     type="button"
-                    onClick={() => onAddToCart?.(product.id)}
+                    onClick={gererAjoutPanier}
                     disabled={isOut}
-                    className="mt-1.5 flex items-center justify-center gap-1.5 rounded-sm bg-black py-2 text-xs font-bold uppercase tracking-wide text-white transition-colors hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-300 disabled:text-neutral-500"
+                    className={`mt-1.5 flex items-center justify-center gap-1.5 rounded-sm py-2 text-xs font-bold uppercase tracking-wide transition-colors disabled:cursor-not-allowed disabled:bg-neutral-300 disabled:text-white ${
+                        venantAjoute ? "bg-green-600 text-white" : "bg-black text-white hover:bg-neutral-800"
+                    }`}
                 >
-                    <CartIcon />
-                    {isOut ? "Indisponible" : "Ajouter au panier"}
+                    {venantAjoute ? <CheckIcon /> : <CartIcon />}
+                    {isOut ? "Indisponible" : venantAjoute ? "Ajouté" : aDesDeclinaisons ? "Choisir une taille" : "Ajouter au panier"}
                 </button>
             </div>
         </div>
@@ -191,6 +242,15 @@ function ChevronIcon({ direction }: { direction: "left" | "right" }) {
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"
             strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
             <path d={direction === "left" ? "M15 18l-6-6 6-6" : "M9 6l6 6-6 6"} />
+        </svg>
+    );
+}
+
+function CheckIcon() {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+            strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+            <path d="M20 6 9 17l-5-5" />
         </svg>
     );
 }

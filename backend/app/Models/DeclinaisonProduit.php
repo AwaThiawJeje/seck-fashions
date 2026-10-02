@@ -32,4 +32,9 @@ class DeclinaisonProduit extends Model
         return Commande::where('statut', 'en_attente')
             ->whereHas('lignes', fn ($q) => $q->where('declinaison_id', $this->id));
     }
+
+    public function scopeOrdonnees($query)
+    {
+        return $query->orderBy('valeur');
+    }
 }

@@ -7,6 +7,8 @@ use App\Http\Controllers\FavoriController;
 use App\Http\Controllers\ImageProduitController;
 use App\Http\Controllers\ProduitController;
 use App\Http\Controllers\LivraisonController;
+use App\Http\Controllers\ParametreController;
+
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -26,6 +28,8 @@ Route::get('/produits', [ProduitController::class, 'index']);
 Route::get('/produits/{produit}', [ProduitController::class, 'show']);
 Route::get('/produits/{produit}/declinaisons', [DeclinaisonProduitController::class, 'index']);
 Route::get('/produits/{produit}/images', [ImageProduitController::class, 'index']);
+
+Route::get('/parametres', [ParametreController::class, 'index']);
 
 // Création de commande : invité ou client connecté (limitée pour éviter le spam)
 Route::post('/commandes', [CommandeController::class, 'store'])->middleware('throttle:10,1');

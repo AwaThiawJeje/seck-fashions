@@ -12,26 +12,45 @@ class ProduitController extends Controller
 {
     public function index(Request $request)
     {
-        $produits = Produit::query()
-            ->where('disponible', true)
-            ->when($request->categorie, fn ($query, $slug) =>
-                $query->whereHas('categorie', fn ($q) => $q->where('slug', $slug))
+        $rechercheParIds = $request->has('ids');
+        $limite = $request->integer('limite');
+
+        $query = Produit::query()
+            ->when(! $rechercheParIds, fn ($q) => $q->enVente())
+            ->when($request->categorie, fn ($q, $slug) =>
+                $q->whereHas('categorie', fn ($q2) => $q2->where('slug', $slug))
             )
-            ->when($request->valeur, fn ($query, $valeur) =>
-                $query->whereHas('declinaisons', fn ($q) =>
-                    $q->where('valeur', $valeur)->where('quantite', '>', 0)
+            ->when($request->valeur, fn ($q, $valeur) =>
+                $q->whereHas('declinaisons', fn ($q2) =>
+                    $q2->where('valeur', $valeur)->where('quantite', '>', 0)
                 )
             )
-            ->when($request->recherche, fn ($query, $terme) =>
-                $query->where('nom', 'like', "%{$terme}%")
+            ->when($request->recherche, fn ($q, $terme) =>
+                $q->where('nom', 'like', "%{$terme}%")
             )
-            ->when($request->ids, fn ($query, $ids) =>
-                $query->whereIn('id', is_array($ids) ? $ids : explode(',', $ids))
-            )
+            ->when($request->boolean('mis_en_avant'), fn ($q) => $q->where('mis_en_avant', true))
+            ->when($request->ids, fn ($q, $ids) =>
+                $q->whereIn('id', is_array($ids) ? $ids : explode(',', $ids))
+            );
+
+        // Utilisé par l'autocomplétion de la barre de recherche : juste quelques résultats
+        // pour une miniature + un nom, donc on évite le COUNT(*) de la pagination et les
+        // relations (catégorie, déclinaisons) qu'elle n'affiche pas. Important vu que cet
+        // appel part à chaque frappe — ça doit rester rapide même quand le catalogue grossira.
+        if ($limite) {
+            $produits = $query
+                ->with(['images' => fn ($q) => $q->orderBy('ordre')])
+                ->limit($limite)
+                ->get();
+
+            return response()->json($produits);
+        }
+
+        $produits = $query
             ->with([
                 'categorie',
                 'images' => fn ($q) => $q->orderBy('ordre'),
-                'declinaisons' => fn ($q) => $q->orderBy('id'),
+                'declinaisons' => fn ($q) => $q->ordonnees(),
             ])
             ->paginate(20);
 
@@ -68,7 +87,7 @@ class ProduitController extends Controller
 
     public function show(Produit $produit)
     {
-        $produit->load(['categorie', 'images', 'declinaisons']);
+        $produit->load(['categorie.parente', 'images', 'declinaisons']);
 
         return response()->json($produit);
     }

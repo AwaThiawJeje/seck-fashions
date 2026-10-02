@@ -82,14 +82,14 @@ class ProduitsReelsSeeder extends Seeder
             [
                 // Nom volontairement générique, voir la remarque dans le chat
                 'nom' => 'Sac bandoulière bleu motif chevron',
-                'cat' => $sacs, 'prix' => 20000, 'quantite' => 3,
+                'cat' => $sacs, 'prix' => 20000, 'quantite' => 0,
                 'images' => ['sac-bandouliere-bleu-chevron-1.jpg'],
             ],
             [
                 'nom' => 'Sneaker Nike Cortez marron',
                 'cat' => $sneakers, 'prix' => 22000,
                 'images' => ['sneaker-nike-cortez-marron-1.jpg'],
-                'decl' => ['40' => 3, '41' => 3, '42' => 3, '43' => 2, '44' => 2],
+                'decl' => ['40' => 3, '41' => 3, '42' => 3, '43' => 2, '44' => 0],
             ],
             [
                 'nom' => 'Sneaker Air Jordan 3 bleu',

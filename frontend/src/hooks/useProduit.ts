@@ -1,18 +1,21 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
-import type { Categorie } from "../types/api";
+import type { Produit } from "../types/api";
 
-export function useCategories() {
-    const [categories, setCategories] = useState<Categorie[]>([]);
+export function useProduit(slug: string) {
+    const [produit, setProduit] = useState<Produit | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        api<Categorie[]>("/api/categories")
-            .then(setCategories)
+        if (!slug) return;
+        setLoading(true);
+        setError(null);
+        api<Produit>(`/api/produits/${slug}`)
+            .then(setProduit)
             .catch((err) => setError(err instanceof Error ? err.message : "Erreur de chargement."))
             .finally(() => setLoading(false));
-    }, []);
+    }, [slug]);
 
-    return { categories, loading, error };
+    return { produit, loading, error };
 }
