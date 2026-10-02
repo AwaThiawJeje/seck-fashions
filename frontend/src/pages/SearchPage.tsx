@@ -29,6 +29,7 @@ export default function SearchPage() {
                         <ProductCard
                             key={produit.id}
                             product={produit}
+                            href={`/produit/${produit.slug}`}
                         />
                     ))}
                 </div>

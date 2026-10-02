@@ -12,41 +12,29 @@ class ProduitController extends Controller
 {
     public function index(Request $request)
     {
+        $estAdmin = $request->user('sanctum')?->role === 'admin';
+        $vueComplete = $estAdmin && $request->boolean('tout'); // demandé explicitement, jamais automatique
         $rechercheParIds = $request->has('ids');
-        $limite = $request->integer('limite');
 
-        $query = Produit::query()
-            ->when(! $rechercheParIds, fn ($q) => $q->enVente())
-            ->when($request->categorie, fn ($q, $slug) =>
-                $q->whereHas('categorie', fn ($q2) => $q2->where('slug', $slug))
+        $produits = Produit::query()
+            ->when(! $rechercheParIds && ! $vueComplete, fn ($query) => $query->enVente())
+            ->when($request->categorie, fn ($query, $slug) =>
+                $query->whereHas('categorie', fn ($q) => $q->where('slug', $slug))
             )
-            ->when($request->valeur, fn ($q, $valeur) =>
-                $q->whereHas('declinaisons', fn ($q2) =>
-                    $q2->where('valeur', $valeur)->where('quantite', '>', 0)
+            ->when($request->valeur, fn ($query, $valeur) =>
+                $query->whereHas('declinaisons', fn ($q) =>
+                    $q->where('valeur', $valeur)->where('quantite', '>', 0)
                 )
             )
-            ->when($request->recherche, fn ($q, $terme) =>
-                $q->where('nom', 'like', "%{$terme}%")
+            ->when($request->recherche, fn ($query, $terme) =>
+                $query->where('nom', 'like', "%{$terme}%")
             )
             ->when($request->boolean('mis_en_avant'), fn ($q) => $q->where('mis_en_avant', true))
-            ->when($request->ids, fn ($q, $ids) =>
-                $q->whereIn('id', is_array($ids) ? $ids : explode(',', $ids))
-            );
-
-        // Utilisé par l'autocomplétion de la barre de recherche : juste quelques résultats
-        // pour une miniature + un nom, donc on évite le COUNT(*) de la pagination et les
-        // relations (catégorie, déclinaisons) qu'elle n'affiche pas. Important vu que cet
-        // appel part à chaque frappe — ça doit rester rapide même quand le catalogue grossira.
-        if ($limite) {
-            $produits = $query
-                ->with(['images' => fn ($q) => $q->orderBy('ordre')])
-                ->limit($limite)
-                ->get();
-
-            return response()->json($produits);
-        }
-
-        $produits = $query
+            ->when($request->ids, fn ($query, $ids) =>
+                $query->whereIn('id', is_array($ids) ? $ids : explode(',', $ids))
+            )
+            ->orderByDesc('mis_en_avant')
+            ->latest()
             ->with([
                 'categorie',
                 'images' => fn ($q) => $q->orderBy('ordre'),
@@ -224,5 +212,30 @@ class ProduitController extends Controller
         }
 
         return $data;
+    }
+
+    public function modifierPrix(Request $request, Produit $produit)
+    {
+        $data = $request->validate([
+            'prix' => ['required', 'numeric', 'min:0'],
+            'prix_promo' => [
+                'nullable', 'numeric', 'min:0',
+                function ($attribute, $value, $fail) use ($request) {
+                    if ($value !== null && (float) $value >= (float) $request->input('prix')) {
+                        $fail('Le prix promotionnel doit être inférieur au prix normal.');
+                    }
+                },
+            ],
+        ], [
+            'prix.required' => 'Le prix est obligatoire.',
+            'prix.numeric' => 'Le prix doit être un nombre valide.',
+            'prix.min' => 'Le prix ne peut pas être négatif.',
+            'prix_promo.numeric' => 'Le prix promotionnel doit être un nombre valide.',
+            'prix_promo.min' => 'Le prix promotionnel ne peut pas être négatif.',
+        ]);
+
+        $produit->update($data);
+
+        return response()->json($produit->fresh(['categorie', 'declinaisons']));
     }
 }

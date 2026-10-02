@@ -64,7 +64,8 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::post('/produits', [ProduitController::class, 'store']);
     Route::put('/produits/{produit}', [ProduitController::class, 'update']);
     Route::delete('/produits/{produit}', [ProduitController::class, 'destroy']);
-
+    Route::patch('/produits/{produit}/prix', [ProduitController::class, 'modifierPrix']);
+    
     // Déclinaisons (pointures, tailles...)
     Route::post('/produits/{produit}/declinaisons', [DeclinaisonProduitController::class, 'store']);
     Route::put('/declinaisons/{declinaison}', [DeclinaisonProduitController::class, 'update']);
@@ -82,4 +83,5 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::put('/commandes/{commande}/valider', [CommandeController::class, 'valider']);
     Route::put('/commandes/{commande}/annuler', [CommandeController::class, 'annuler']);
     Route::put('/commandes/{commande}/livraison', [LivraisonController::class, 'enregistrer']);
+    Route::post('/commandes/manuelle', [CommandeController::class, 'storeManuelle']);
 });

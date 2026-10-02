@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api";
 import type { Page, Produit } from "../types/api";
 
@@ -6,6 +6,7 @@ type Filtres = {
     categorie?: string;
     recherche?: string;
     valeur?: string;
+    tout?: boolean; // réservé à l'admin : montre aussi les produits masqués/épuisés
 };
 
 export function useProduits(filtres: Filtres = {}) {
@@ -13,11 +14,12 @@ export function useProduits(filtres: Filtres = {}) {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
+    const charger = useCallback(() => {
         const params = new URLSearchParams();
         if (filtres.categorie) params.set("categorie", filtres.categorie);
         if (filtres.recherche) params.set("recherche", filtres.recherche);
         if (filtres.valeur) params.set("valeur", filtres.valeur);
+        if (filtres.tout) params.set("tout", "1");
 
         setLoading(true);
         setError(null);
@@ -26,7 +28,11 @@ export function useProduits(filtres: Filtres = {}) {
             .then((page) => setProduits(page.data))
             .catch((err) => setError(err instanceof Error ? err.message : "Erreur de chargement."))
             .finally(() => setLoading(false));
-    }, [filtres.categorie, filtres.recherche, filtres.valeur]);
+    }, [filtres.categorie, filtres.recherche, filtres.valeur, filtres.tout]);
 
-    return { produits, loading, error };
+    useEffect(() => {
+        charger();
+    }, [charger]);
+
+    return { produits, loading, error, refetch: charger };
 }
