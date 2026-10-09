@@ -18,17 +18,25 @@ import DashboardPage from "./pages/admin/DashboardPage";
 import CategoriesPage from "./pages/admin/CategoriesPage";
 import CommandesPage from "./pages/admin/CommandesPage";
 import ProduitsPage from "./pages/admin/ProduitsPage";
+import AvisPage from "./pages/admin/AvisPage";
+import ConnexionPage from "./pages/ConnexionPage";
+import InscriptionPage from "./pages/InscriptionPage";
+import ComptePage from "./pages/ComptePage";
+import MesCommandesPage from "./pages/MesCommandesPage";
+import RequireUser from "./components/RequireUser";
 
 function BoutiqueLayout() {
     const { favoris } = useFavoris();
     const { nombreArticles } = usePanier();
     const location = useLocation();
 
-    const active: "accueil" | "categories" | "favoris" | "panier" | undefined = (() => {
-        if (location.pathname === "/") return "accueil";
-        if (location.pathname.startsWith("/categories")) return "categories";
-        if (location.pathname.startsWith("/favoris")) return "favoris";
-        if (location.pathname.startsWith("/panier")) return "panier";
+    const active: "accueil" | "categories" | "favoris" | "panier" | "compte" | undefined = (() => {
+        const chemin = location.pathname;
+        if (chemin === "/") return "accueil";
+        if (chemin.startsWith("/categories")) return "categories";
+        if (chemin.startsWith("/favoris")) return "favoris";
+        if (chemin.startsWith("/panier")) return "panier";
+        if (["/compte", "/mes-commandes", "/connexion", "/inscription"].includes(chemin)) return "compte";
         return undefined;
     })();
 
@@ -57,6 +65,12 @@ export default function App() {
                                 <Route path="/recherche" element={<SearchPage />} />
                                 <Route path="/favoris" element={<FavorisPage />} />
                                 <Route path="/panier" element={<PanierPage />} />
+                                <Route path="/connexion" element={<ConnexionPage />} />
+                                <Route path="/inscription" element={<InscriptionPage />} />
+                                <Route element={<RequireUser />}>
+                                    <Route path="/compte" element={<ComptePage />} />
+                                    <Route path="/mes-commandes" element={<MesCommandesPage />} />
+                                </Route>
                             </Route>
 
                             <Route path="/admin/connexion" element={<AdminLoginPage />} />
@@ -67,6 +81,7 @@ export default function App() {
                                     <Route path="categories" element={<CategoriesPage />} />
                                     <Route path="commandes" element={<CommandesPage />} />
                                     <Route path="produits" element={<ProduitsPage />} />
+                                    <Route path="avis" element={<AvisPage />} />
                                 </Route>
                             </Route>
                         </Routes>

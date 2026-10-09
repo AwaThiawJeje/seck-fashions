@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import ProductCard from "../components/ProductCard";
 import { useFavoris } from "../context/FavorisContext";
+import BandeauCompte from "../components/BandeauCompte";
 
 export default function FavorisPage() {
     const { favoris, loading } = useFavoris();
@@ -8,6 +9,7 @@ export default function FavorisPage() {
     return (
         <div className="mx-auto max-w-7xl px-4 py-6">
             <h1 className="mb-4 text-lg font-bold uppercase tracking-wide">Mes favoris</h1>
+            <BandeauCompte texte="Pour retrouver tes favoris sur tous tes appareils," />
 
             {loading ? (
                 <p className="py-10 text-center text-sm text-neutral-500">Chargement...</p>

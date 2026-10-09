@@ -10,8 +10,12 @@ export interface Categorie {
 export interface Declinaison {
     id: number;
     produit_id: number;
-    valeur: string;
+    taille: string | null;
+    couleur: string | null;
+    couleur_nom: string | null;
     quantite: number;
+    /** Texte combiné, ex: "Rouge — 38", "Rouge" seul, ou "38" seul. */
+    label: string;
 }
 
 export interface ImageProduit {
@@ -36,9 +40,23 @@ export interface Produit {
     disponible: boolean;
     reference: string | null;
     mis_en_avant: boolean;
+    note_moyenne: string | null;
+    nombre_avis: number;
     categorie?: Categorie;
     images?: ImageProduit[];
     declinaisons?: Declinaison[];
+}
+
+export interface Avis {
+    id: number;
+    produit_id: number;
+    user_id: number;
+    note: number;
+    commentaire: string | null;
+    valide?: boolean;
+    created_at?: string;
+    user?: { id: number; name: string };
+    produit?: { id: number; nom: string; slug: string };
 }
 
 export interface Page<T> {
@@ -85,6 +103,7 @@ export interface Livraison {
 
 export interface Commande {
     id: number;
+    numero: number;
     user_id: number | null;
     statut: StatutCommande;
     total: string;

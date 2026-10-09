@@ -1,25 +1,17 @@
-import { useCallback, useEffect, useState } from "react";
-import { api } from "../lib/api";
-import type { Commande, Page } from "../types/api";
+import { useCallback } from "react";
+import { useListePaginee } from "./useListePaginee";
+import type { Commande } from "../types/api";
 
 export function useCommandesAdmin(statut?: string) {
-    const [commandes, setCommandes] = useState<Commande[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const construireUrl = useCallback(
+        (page: number) => {
+            const params = new URLSearchParams({ page: String(page) });
+            if (statut) params.set("statut", statut);
+            return `/api/commandes?${params.toString()}`;
+        },
+        [statut]
+    );
 
-    const charger = useCallback(() => {
-        setLoading(true);
-        setError(null);
-        const params = statut ? `?statut=${statut}` : "";
-        api<Page<Commande>>(`/api/commandes${params}`)
-            .then((page) => setCommandes(page.data))
-            .catch((err) => setError(err instanceof Error ? err.message : "Erreur de chargement."))
-            .finally(() => setLoading(false));
-    }, [statut]);
-
-    useEffect(() => {
-        charger();
-    }, [charger]);
-
-    return { commandes, loading, error, refetch: charger };
+    const { elements, ...reste } = useListePaginee<Commande>(construireUrl);
+    return { commandes: elements, ...reste };
 }

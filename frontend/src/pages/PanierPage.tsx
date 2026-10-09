@@ -8,6 +8,7 @@ import { construireLienWhatsapp, construireMessageCommande } from "../lib/whatsa
 import Modal from "../components/Modal";
 import type { Commande } from "../types/api";
 import whatsappIcon from "../assets/whatsapp-icon.png";
+import BandeauCompte from "../components/BandeauCompte";
 
 function formatPrice(value: number) {
     return `${value.toLocaleString("fr-FR")} FCFA`;
@@ -74,7 +75,7 @@ export default function PanierPage() {
             <h1 className="mb-4 text-lg font-bold uppercase tracking-wide">
                 Mon panier ({lignes.length} article{lignes.length > 1 ? "s" : ""})
             </h1>
-
+            <BandeauCompte texte="Pour retrouver ton panier sur tous tes appareils," />
             <div className="flex flex-col gap-8 md:flex-row">
                 <div className="flex flex-1 flex-col gap-3">
                     {lignes.map((ligne) => (

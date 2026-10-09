@@ -15,8 +15,9 @@ class CommandeController extends Controller
     {
         $commandes = Commande::query()
             ->when($request->statut, fn ($query, $statut) => $query->where('statut', $statut))
-            ->with(['user', 'lignes'])
+            ->with(['user', 'lignes', 'livraison'])
             ->latest()
+            ->orderByDesc('id')
             ->paginate(20);
 
         return response()->json($commandes);
@@ -153,6 +154,9 @@ class CommandeController extends Controller
 
         foreach ($articles as $article) {
             $produit = Produit::findOrFail($article['produit_id']);
+            if (! $produit->disponible) {
+                abort(422, "\"{$produit->nom}\" n'est plus disponible.");
+            }
             $declinaison = null;
             $nomLigne = $produit->nom;
 
@@ -166,10 +170,10 @@ class CommandeController extends Controller
                 }
 
                 if ($declinaison->quantite < $article['quantite']) {
-                    abort(422, "Stock insuffisant pour \"{$produit->nom}\" ({$declinaison->valeur}) — il n'en reste que {$declinaison->quantite}.");
+                    abort(422, "Stock insuffisant pour \"{$produit->nom}\" ({$declinaison->label}) — il n'en reste que {$declinaison->quantite}.");
                 }
 
-                $nomLigne .= " — {$declinaison->valeur}";
+                $nomLigne .= " — {$declinaison->label}";
             } elseif ($produit->quantite < $article['quantite']) {
                 abort(422, "Stock insuffisant pour \"{$produit->nom}\" — il n'en reste que {$produit->quantite}.");
             }
@@ -181,7 +185,7 @@ class CommandeController extends Controller
             $lignes[] = [
                 'produit_id' => $produit->id,
                 'declinaison_id' => $declinaison?->id,
-                'declinaison_valeur' => $declinaison?->valeur,
+                'declinaison_valeur' => $declinaison?->label,
                 'nom_produit' => $nomLigne,
                 'prix_unitaire' => $prixUnitaire,
                 'quantite' => $article['quantite'],
@@ -202,11 +206,9 @@ class CommandeController extends Controller
             }
 
             foreach ($commande->lignes as $ligne) {
-                if ($ligne->declinaison_valeur) {
+                if ($ligne->declinaison_id) {
                     $declinaison = DeclinaisonProduit::lockForUpdate()
-                        ->where('produit_id', $ligne->produit_id)
-                        ->where('valeur', $ligne->declinaison_valeur)
-                        ->first();
+                        ->find($ligne->declinaison_id);
 
                     if (! $declinaison) {
                         abort(422, "\"{$ligne->nom_produit}\" n'existe plus au catalogue — impossible de valider la commande.");
@@ -253,9 +255,8 @@ class CommandeController extends Controller
                         continue;
                     }
 
-                    if ($ligne->declinaison_valeur) {
-                        DeclinaisonProduit::where('produit_id', $ligne->produit_id)
-                            ->where('valeur', $ligne->declinaison_valeur)
+                    if ($ligne->declinaison_id) {
+                        DeclinaisonProduit::whereKey($ligne->declinaison_id)
                             ->increment('quantite', $ligne->quantite);
                     } else {
                         Produit::whereKey($ligne->produit_id)->increment('quantite', $ligne->quantite);

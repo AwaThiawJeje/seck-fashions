@@ -1,22 +1,20 @@
 import { useState } from "react";
-import { Navigate, useLocation, useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { ApiError } from "../../lib/api";
 
 export default function LoginPage() {
     const { user, loading, login } = useAuth();
     const navigate = useNavigate();
-    const location = useLocation();
 
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [envoiEnCours, setEnvoiEnCours] = useState(false);
     const [erreur, setErreur] = useState<string | null>(null);
 
-    const destination = (location.state as { from?: { pathname: string } })?.from?.pathname ?? "/admin";
-
+    // Déjà connecté en admin : on arrive toujours sur le tableau de bord.
     if (!loading && user?.role === "admin") {
-        return <Navigate to={destination} replace />;
+        return <Navigate to="/admin" replace />;
     }
 
     const soumettre = async (e: React.FormEvent) => {
@@ -30,7 +28,7 @@ export default function LoginPage() {
                 setErreur("Ce compte n'a pas accès à l'administration.");
                 return;
             }
-            navigate(destination, { replace: true });
+            navigate("/admin", { replace: true });
         } catch (err) {
             setErreur(
                 err instanceof ApiError && err.status === 422

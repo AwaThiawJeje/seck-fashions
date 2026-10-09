@@ -10,6 +10,8 @@ import RowActions from "../../components/crud/RowActions";
 import Modal from "../../components/Modal";
 import { TextField, TextareaField, ToggleField } from "../../components/crud/fields";
 import type { Produit, ImageProduit, Categorie } from "../../types/api";
+import BoutonVoirPlus from "../../components/BoutonVoirPlus";
+import { useSearchParams } from "react-router-dom";
 
 function formatPrice(value: string) {
     return `${Number(value).toLocaleString("fr-FR")} FCFA`;
@@ -22,10 +24,46 @@ function stockTotal(produit: Produit): number {
     return produit.quantite;
 }
 
+type EtatProduit = "en_stock" | "epuise" | "masque";
+
+const ETATS: { valeur: EtatProduit | ""; label: string }[] = [
+    { valeur: "", label: "Tous" },
+    { valeur: "en_stock", label: "En stock" },
+    { valeur: "epuise", label: "Épuisés" },
+    { valeur: "masque", label: "Masqués" },
+];
+
+const MESSAGES_VIDES: Record<EtatProduit | "", string> = {
+    "": "Aucun produit pour le moment.",
+    en_stock: "Aucun produit en stock.",
+    epuise: "Aucun produit épuisé.",
+    masque: "Aucun produit masqué.",
+};
+
 export default function ProduitsPage() {
     // tout: true — l'admin doit voir aussi les produits masqués ou épuisés ici,
     // contrairement au site public qui ne les montre jamais.
-    const { produits, loading, error, refetch } = useProduits({ tout: true });
+    const [terme, setTerme] = useState("");
+    const [recherche, setRecherche] = useState("");
+
+    useEffect(() => {
+        const timer = setTimeout(() => setRecherche(terme.trim()), 300);
+        return () => clearTimeout(timer);
+    }, [terme]);
+
+    // Le filtre vit dans l'adresse (?etat=epuise) : le tableau de bord peut ainsi y envoyer
+    // directement, et cliquer sur « Produits » dans le menu remet tout à zéro.
+    const [searchParams, setSearchParams] = useSearchParams();
+    const etatUrl = searchParams.get("etat");
+    const etat: EtatProduit | "" = ETATS.some((e) => e.valeur === etatUrl) ? (etatUrl as EtatProduit) : "";
+
+    const changerEtat = (valeur: EtatProduit | "") => {
+        setSearchParams(valeur ? { etat: valeur } : {}, { replace: true });
+    };
+
+    const { produits, total, loading, error, refetch, aPlusDeResultats, voirPlus, chargementSuite, erreurSuite } =
+        useProduits({ tout: true, recherche: recherche || undefined, etat: etat || undefined });
+        
     const [formulaire, setFormulaire] = useState<{ produit: Produit | null } | null>(null);
     const [produitASupprimer, setProduitASupprimer] = useState<Produit | null>(null);
     const [suppressionEnCours, setSuppressionEnCours] = useState(false);
@@ -54,10 +92,45 @@ export default function ProduitsPage() {
                 titre="Produits"
                 libelleNouveau="+ Nouveau produit"
                 onNouveau={() => setFormulaire({ produit: null })}
+                entete={
+                    <>
+                        <div className="flex items-center gap-3">
+                            <input
+                                type="search"
+                                value={terme}
+                                onChange={(e) => setTerme(e.target.value)}
+                                placeholder="Chercher un produit..."
+                                className="min-w-0 flex-1 rounded-sm border border-neutral-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
+                            />
+                            {!loading && (
+                                <span className="shrink-0 text-xs text-neutral-400">
+                                    {total} produit{total > 1 ? "s" : ""}
+                                </span>
+                            )}
+                        </div>
+
+                        <div className="mt-3 flex flex-wrap gap-1.5">
+                            {ETATS.map((e) => (
+                                <button
+                                    key={e.valeur}
+                                    type="button"
+                                    onClick={() => changerEtat(e.valeur)}
+                                    className={`rounded-sm px-3 py-1.5 text-xs font-semibold transition-colors ${
+                                        etat === e.valeur
+                                            ? "bg-black text-white"
+                                            : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
+                                    }`}
+                                >
+                                    {e.label}
+                                </button>
+                            ))}
+                        </div>
+                    </>
+                }
                 loading={loading}
                 error={error}
                 estVide={produits.length === 0}
-                messageVide="Aucun produit pour le moment."
+                messageVide={recherche ? `Aucun produit ne correspond à « ${recherche} ».` : MESSAGES_VIDES[etat]}
             >
                 <div className="flex flex-col gap-2">
                     {produits.map((produit) => {
@@ -137,6 +210,12 @@ export default function ProduitsPage() {
                         );
                     })}
                 </div>
+                <BoutonVoirPlus
+                    visible={aPlusDeResultats}
+                    chargement={chargementSuite}
+                    erreur={erreurSuite}
+                    onClick={voirPlus}
+                />
             </ListShell>
 
             {formulaire && (
@@ -268,7 +347,7 @@ function GestionPhotosModal({
     );
 }
 
-type LigneDeclinaison = { valeur: string; quantite: number };
+type LigneDeclinaison = { taille: string; couleur: string | null; couleurNom: string; quantite: number };
 type PhotoEnAttente = { id: string; fichier: File; apercu: string };
 
 function FormulaireProduit({
@@ -296,8 +375,14 @@ function FormulaireProduit({
     const [quantite, setQuantite] = useState(produit?.quantite ?? 0);
 
     const [declinaisons, setDeclinaisons] = useState<LigneDeclinaison[]>(() => {
-        const existantes = produit?.declinaisons?.map((d) => ({ valeur: d.valeur, quantite: d.quantite })) ?? [];
-        return [...existantes, { valeur: "", quantite: 0 }];
+        const existantes =
+            produit?.declinaisons?.map((d) => ({
+                taille: d.taille ?? "",
+                couleur: d.couleur,
+                couleurNom: d.couleur_nom ?? "",
+                quantite: d.quantite,
+            })) ?? [];
+        return [...existantes, { taille: "", couleur: null, couleurNom: "", quantite: 0 }];
     });
 
     const [imagesExistantes, setImagesExistantes] = useState<ImageProduit[]>(produit?.images ?? []);
@@ -326,13 +411,15 @@ function FormulaireProduit({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    const ligneEstVide = (d: LigneDeclinaison) => d.taille === "" && d.quantite === 0 && !d.couleur && d.couleurNom === "";
+
     const ajouterLigneDeclinaison = () => {
         setDeclinaisons((prev) => {
             const derniere = prev[prev.length - 1];
-            if (derniere && derniere.valeur === "" && derniere.quantite === 0) {
+            if (derniere && ligneEstVide(derniere)) {
                 return prev;
             }
-            return [...prev, { valeur: "", quantite: 0 }];
+            return [...prev, { taille: "", couleur: null, couleurNom: "", quantite: 0 }];
         });
         demandeFocusProchaineLigne.current = true;
     };
@@ -344,14 +431,18 @@ function FormulaireProduit({
                 if (champ === "quantite") {
                     return { ...d, quantite: valeurBrute === "" ? 0 : Number(valeurBrute) || 0 };
                 }
-                return { ...d, valeur: valeurBrute };
+                if (champ === "couleur") {
+                    return { ...d, couleur: valeurBrute || null };
+                }
+                if (champ === "couleurNom") {
+                    return { ...d, couleurNom: valeurBrute };
+                }
+                return { ...d, taille: valeurBrute };
             });
 
             const estDerniereLigne = i === copie.length - 1;
-            const ligneEstRemplie = copie[i].valeur !== "" || copie[i].quantite !== 0;
-
-            if (estDerniereLigne && ligneEstRemplie) {
-                return [...copie, { valeur: "", quantite: 0 }];
+            if (estDerniereLigne && !ligneEstVide(copie[i])) {
+                return [...copie, { taille: "", couleur: null, couleurNom: "", quantite: 0 }];
             }
             return copie;
         });
@@ -392,7 +483,16 @@ function FormulaireProduit({
             disponible: visible,
             mis_en_avant: misEnAvant,
             quantite: plusieursTailles ? 0 : quantite,
-            declinaisons: plusieursTailles ? declinaisons.filter((d) => d.valeur.trim() !== "") : [],
+            declinaisons: plusieursTailles
+                ? declinaisons
+                      .filter((d) => !ligneEstVide(d))
+                      .map((d) => ({
+                          taille: d.taille.trim() || null,
+                          couleur: d.couleur,
+                          couleur_nom: d.couleurNom.trim() || null,
+                          quantite: d.quantite,
+                      }))
+                : [],
         };
 
         try {
@@ -460,17 +560,59 @@ function FormulaireProduit({
 
                 {plusieursTailles ? (
                     <div className="mb-3 rounded-md border border-neutral-200 p-3">
+                        <p className="mb-2 text-xs text-neutral-400">
+                            Taille seule, couleur seule, ou les deux combinées (ex: "Rouge" + "38") — avec une quantité propre à chaque ligne.
+                        </p>
                         {declinaisons.map((d, i) => (
-                            <div key={i} className="mb-2 flex items-center gap-2">
+                            <div key={i} className="mb-2 flex flex-wrap items-center gap-2">
                                 <input
                                     ref={(el) => { refsValeur.current[i] = el; }}
                                     type="text"
-                                    value={d.valeur}
-                                    onChange={(e) => modifierLigneDeclinaison(i, "valeur", e.target.value)}
+                                    value={d.taille}
+                                    onChange={(e) => modifierLigneDeclinaison(i, "taille", e.target.value)}
                                     onKeyDown={(e) => gererTouchesValeur(e, i)}
-                                    placeholder="Ex : 42, M..."
-                                    className="w-28 rounded-sm border border-neutral-300 px-2 py-1.5 text-sm"
+                                    placeholder="Taille (ex : 42, M...)"
+                                    className="w-32 rounded-sm border border-neutral-300 px-2 py-1.5 text-sm"
                                 />
+                                <label
+                                    title={d.couleur ? `Couleur : ${d.couleur}` : "Associer une couleur (optionnel)"}
+                                    className="relative h-8 w-8 shrink-0 cursor-pointer overflow-hidden rounded-full border border-neutral-300"
+                                    style={{ backgroundColor: d.couleur ?? "#f5f5f5" }}
+                                >
+                                    {!d.couleur && (
+                                        <span className="absolute inset-0 flex items-center justify-center text-neutral-400">
+                                            <PaletteIcon />
+                                        </span>
+                                    )}
+                                    <input
+                                        type="color"
+                                        value={d.couleur ?? "#000000"}
+                                        onChange={(e) => modifierLigneDeclinaison(i, "couleur", e.target.value)}
+                                        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                                    />
+                                </label>
+                                {d.couleur ? (
+                                    <>
+                                        <input
+                                            type="text"
+                                            value={d.couleurNom}
+                                            onChange={(e) => modifierLigneDeclinaison(i, "couleurNom", e.target.value)}
+                                            placeholder="Nom couleur (ex : Rouge)"
+                                            className="w-36 rounded-sm border border-neutral-300 px-2 py-1.5 text-sm"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                modifierLigneDeclinaison(i, "couleur", "");
+                                                modifierLigneDeclinaison(i, "couleurNom", "");
+                                            }}
+                                            title="Retirer la couleur"
+                                            className="text-[10px] font-semibold text-neutral-400 hover:text-black hover:underline"
+                                        >
+                                            Retirer
+                                        </button>
+                                    </>
+                                ) : null}
                                 <input
                                     ref={(el) => { refsQuantite.current[i] = el; }}
                                     type="number"
@@ -480,7 +622,7 @@ function FormulaireProduit({
                                     onKeyDown={(e) => gererTouchesQuantite(e, i)}
                                     onFocus={(e) => e.target.select()}
                                     placeholder="Quantité"
-                                    className="w-28 rounded-sm border border-neutral-300 px-2 py-1.5 text-sm"
+                                    className="w-24 rounded-sm border border-neutral-300 px-2 py-1.5 text-sm"
                                 />
                                 <button type="button" onClick={() => setIndexDeclinaisonASupprimer(i)} className="text-red-400 hover:text-red-600">
                                     <SmallTrashIcon />
@@ -492,7 +634,7 @@ function FormulaireProduit({
                             onClick={ajouterLigneDeclinaison}
                             className="text-xs font-semibold text-neutral-600 hover:text-black hover:underline"
                         >
-                            + Ajouter une taille
+                            + Ajouter une ligne
                         </button>
                         <p className="mt-1 text-xs text-neutral-400">
                             Astuce : Entrée (ou flèche droite) passe à la case suivante. Une nouvelle ligne apparaît automatiquement dès que tu remplis la dernière.
@@ -528,9 +670,16 @@ function FormulaireProduit({
                 libelleConfirm="Retirer"
                 message={
                     <>
-                        Retirer la taille{" "}
+                        Retirer la ligne{" "}
                         <span className="font-semibold">
-                            {indexDeclinaisonASupprimer !== null ? (declinaisons[indexDeclinaisonASupprimer]?.valeur || "sans nom") : ""}
+                            {indexDeclinaisonASupprimer !== null
+                                ? [
+                                      declinaisons[indexDeclinaisonASupprimer]?.couleurNom,
+                                      declinaisons[indexDeclinaisonASupprimer]?.taille,
+                                  ]
+                                      .filter(Boolean)
+                                      .join(" — ") || "sans nom"
+                                : ""}
                         </span> ?
                     </>
                 }
@@ -548,11 +697,6 @@ function SelecteurCategorie({
 }) {
     const { categories, refetch } = useCategories();
     const [ajoutOuvert, setAjoutOuvert] = useState(false);
-
-    const optionsCategories = categories.flatMap((racine) => [
-        { value: racine.id.toString(), label: racine.nom },
-        ...(racine.enfants ?? []).map((enfant) => ({ value: enfant.id.toString(), label: `— ${enfant.nom}` })),
-    ]);
 
     return (
         <div className="mb-3">
@@ -573,9 +717,16 @@ function SelecteurCategorie({
                 className="w-full rounded-sm border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none"
             >
                 <option value="">Choisir une catégorie...</option>
-                {optionsCategories.map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
+                {categories.flatMap((racine) => [
+                    <option key={racine.id} value={racine.id}>
+                        {racine.nom}
+                    </option>,
+                    ...(racine.enfants ?? []).map((enfant) => (
+                        <option key={enfant.id} value={enfant.id}>
+                            {racine.nom} › {enfant.nom}
+                        </option>
+                    )),
+                ])}
             </select>
 
             {ajoutOuvert && (
@@ -851,6 +1002,18 @@ function TagIcon() {
             strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]">
             <path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z" />
             <circle cx="7" cy="7" r="1" fill="currentColor" stroke="none" />
+        </svg>
+    );
+}
+
+function PaletteIcon({ className = "h-4 w-4" }: { className?: string }) {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+            strokeLinecap="round" strokeLinejoin="round" className={className}>
+            <path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.8-.9 1.8-1.8 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-.9.7-1.6 1.6-1.6h1.9A3.7 3.7 0 0 0 20.9 11.6 8.9 8.9 0 0 0 12 3Z" />
+            <circle cx="7.5" cy="10.5" r="1" fill="currentColor" />
+            <circle cx="11" cy="7" r="1" fill="currentColor" />
+            <circle cx="15.5" cy="8" r="1" fill="currentColor" />
         </svg>
     );
 }

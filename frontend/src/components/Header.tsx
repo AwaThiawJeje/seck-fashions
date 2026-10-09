@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import SearchBar from "./SearchBar";
+import { useAuth } from "../context/AuthContext";
 
 type HeaderVariant = "default" | "product";
 
@@ -16,6 +17,9 @@ export default function Header({
     cartCount = 0,
     onBack,
 }: HeaderProps) {
+
+    const { user } = useAuth();
+
     return (
         <header className="sticky top-0 z-50 w-full bg-black text-white">
             <div className="mx-auto flex h-16 max-w-7xl items-center gap-4 px-4 sm:px-6">
@@ -57,6 +61,13 @@ export default function Header({
                 )}
 
                 <div className="ml-auto hidden items-center gap-1 md:flex">
+                    <IconLink
+                        href={user ? "/compte" : "/connexion"}
+                        label={user ? "Mon compte" : "Se connecter"}
+                        count={0}
+                    >
+                        <UserIcon />
+                    </IconLink>
                     <IconLink
                         href="/favoris"
                         label={`Favoris, ${favoritesCount} article(s)`}
@@ -102,17 +113,18 @@ function IconLink({
     children: React.ReactNode;
 }) {
     return (
-        <a href={href}
+        <Link
+            to={href}
             aria-label={label}
             className="relative rounded-full p-2 transition-colors hover:bg-white/10"
         >
             {children}
             {count > 0 && (
                 <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-1 text-[10px] font-bold text-black">
-                {count > 99 ? "99+" : count}
+                    {count > 99 ? "99+" : count}
                 </span>
             )}
-        </a>
+        </Link>
     );
 }
 
@@ -141,6 +153,16 @@ function BackIcon() {
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
             strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6">
         <path d="M15 18l-6-6 6-6" />
+        </svg>
+    );
+}
+
+function UserIcon() {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+            strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6">
+            <circle cx="12" cy="8" r="4" />
+            <path d="M4 21a8 8 0 0 1 16 0" />
         </svg>
     );
 }

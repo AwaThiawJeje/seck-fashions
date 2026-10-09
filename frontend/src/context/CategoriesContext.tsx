@@ -19,8 +19,8 @@ export function CategoriesProvider({ children }: { children: ReactNode }) {
     // Chargé une seule fois pour toute l'app : avant, CategoryPage et CategorySidebar
     // appelaient chacun /api/categories de leur côté, doublant la requête à chaque
     // visite d'une page catégorie et ralentissant le premier affichage.
-    const charger = useCallback(() => {
-        setLoading(true);
+    const charger = useCallback((silencieux: boolean) => {
+        if (!silencieux) setLoading(true);
         setError(null);
         api<Categorie[]>("/api/categories")
             .then(setCategories)
@@ -29,11 +29,13 @@ export function CategoriesProvider({ children }: { children: ReactNode }) {
     }, []);
 
     useEffect(() => {
-        charger();
+        charger(false);
     }, [charger]);
 
+    const refetch = useCallback(() => charger(true), [charger]);
+
     return (
-        <CategoriesContext.Provider value={{ categories, loading, error, refetch: charger }}>
+        <CategoriesContext.Provider value={{ categories, loading, error, refetch }}>
             {children}
         </CategoriesContext.Provider>
     );

@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
-type NavKey = "accueil" | "categories" | "favoris" | "panier";
+type NavKey = "accueil" | "categories" | "favoris" | "panier" | "compte";
 
 type BottomNavProps = {
     active?: NavKey;
@@ -9,11 +10,14 @@ type BottomNavProps = {
 };
 
 export default function BottomNav({ active, favoritesCount = 0, cartCount = 0 }: BottomNavProps) {
+    const { user } = useAuth();
+
     const items: { key: NavKey; href: string; label: string; icon: React.ReactNode; count?: number }[] = [
         { key: "accueil", href: "/", label: "Accueil", icon: <HomeIcon /> },
         { key: "categories", href: "/categories/chaussures", label: "Catégories", icon: <CategoryIcon /> },
         { key: "favoris", href: "/favoris", label: "Favoris", icon: <HeartIcon />, count: favoritesCount },
         { key: "panier", href: "/panier", label: "Panier", icon: <CartIcon />, count: cartCount },
+        { key: "compte", href: user ? "/compte" : "/connexion", label: user ? "Compte" : "Connexion", icon: <UserIcon /> },
     ];
 
     return (
@@ -78,6 +82,16 @@ function CartIcon() {
         <path d="M3 5h2.2l1.6 9.4a1.6 1.6 0 0 0 1.6 1.3h7.9a1.6 1.6 0 0 0 1.6-1.2L19.4 8H6.2" />
         <circle cx="9.5" cy="19.5" r="1.3" />
         <circle cx="16.5" cy="19.5" r="1.3" />
+        </svg>
+    );
+}
+
+function UserIcon() {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+            strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6">
+            <circle cx="12" cy="8" r="4" />
+            <path d="M4 21a8 8 0 0 1 16 0" />
         </svg>
     );
 }

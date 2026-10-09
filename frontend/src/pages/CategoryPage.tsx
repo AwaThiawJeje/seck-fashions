@@ -1,29 +1,28 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import CategorySidebar from "../components/CategorySideBar";
 import ProductCard from "../components/ProductCard";
+import BoutonVoirPlus from "../components/BoutonVoirPlus";
 import { useProduits } from "../hooks/useProduits";
 import { useCategories } from "../context/CategoriesContext";
 
 export default function CategoryPage() {
     const { slug = "" } = useParams<{ slug: string }>();
     const [query, setQuery] = useState("");
-    const navigate = useNavigate();
+    const [recherche, setRecherche] = useState("");
 
     const { categories } = useCategories();
 
-    // Une catégorie parente (ex. "Chaussures") n'a jamais de produit directement
-    // rattaché — seuls ses enfants ("Sneakers", "Sandales"...) en ont. Si on atterrit
-    // dessus (lien header, sidebar...), on ouvre automatiquement son premier enfant
-    // pour ne jamais tomber sur une grille vide par défaut.
+    // Petit délai pour ne pas interroger le serveur à chaque lettre tapée.
     useEffect(() => {
-        const racine = categories.find((c) => c.slug === slug);
-        if (racine?.enfants && racine.enfants.length > 0) {
-            navigate(`/categories/${racine.enfants[0].slug}`, { replace: true });
-        }
-    }, [categories, slug, navigate]);
+        const timer = setTimeout(() => setRecherche(query.trim()), 300);
+        return () => clearTimeout(timer);
+    }, [query]);
 
-    const { produits, loading, error } = useProduits({ categorie: slug });
+    const { produits, loading, error, aPlusDeResultats, voirPlus, chargementSuite, erreurSuite } = useProduits({
+        categorie: slug,
+        recherche: recherche || undefined,
+    });
 
     const categoryLabel = useMemo(() => {
         for (const racine of categories) {
@@ -33,12 +32,6 @@ export default function CategoryPage() {
         }
         return slug;
     }, [categories, slug]);
-
-    const visibleProducts = useMemo(() => {
-        const q = query.trim().toLowerCase();
-        if (!q) return produits;
-        return produits.filter((p) => p.nom.toLowerCase().includes(q));
-    }, [produits, query]);
 
     return (
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-6 sm:flex-row">
@@ -65,20 +58,31 @@ export default function CategoryPage() {
                     <p className="py-10 text-center text-sm text-neutral-500">Chargement...</p>
                 ) : error ? (
                     <p className="py-10 text-center text-sm text-red-600">{error}</p>
-                ) : visibleProducts.length === 0 ? (
+                ) : produits.length === 0 ? (
                     <p className="py-10 text-center text-sm text-neutral-500">
-                        Aucun article ne correspond à ta recherche dans cette catégorie.
+                        {recherche
+                            ? "Aucun article ne correspond à ta recherche dans cette catégorie."
+                            : "Aucun article dans cette catégorie pour le moment."}
                     </p>
                 ) : (
-                    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-                        {visibleProducts.map((produit) => (
-                            <ProductCard
-                                key={produit.id}
-                                product={produit}
-                                href={`/produit/${produit.slug}`}
-                            />
-                        ))}
-                    </div>
+                    <>
+                        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+                            {produits.map((produit) => (
+                                <ProductCard
+                                    key={produit.id}
+                                    product={produit}
+                                    href={`/produit/${produit.slug}`}
+                                />
+                            ))}
+                        </div>
+
+                        <BoutonVoirPlus
+                            visible={aPlusDeResultats}
+                            chargement={chargementSuite}
+                            erreur={erreurSuite}
+                            onClick={voirPlus}
+                        />
+                    </>
                 )}
             </div>
         </div>

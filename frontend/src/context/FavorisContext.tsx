@@ -33,6 +33,9 @@ const FavorisContext = createContext<FavorisContextValue | null>(null);
 
 export function FavorisProvider({ children }: { children: ReactNode }) {
     const { user, loading: authLoading } = useAuth();
+    // On ne dépend que de « connecté ou non » : modifier son nom ne doit pas tout recharger.
+    const connecte = user !== null;
+
     const [favoris, setFavoris] = useState<Produit[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -40,8 +43,21 @@ export function FavorisProvider({ children }: { children: ReactNode }) {
         if (authLoading) return;
         setLoading(true);
 
-        if (user) {
-            api<Favori[]>("/api/favoris")
+        if (connecte) {
+            // Les favoris choisis avant la connexion rejoignent le compte, puis le
+            // stockage de l'appareil est vidé : le compte devient la seule source.
+            const idsInvite = lireLocalStorage();
+            const fusion =
+                idsInvite.length > 0
+                    ? api("/api/favoris/sync", { method: "POST", body: { produit_ids: idsInvite } })
+                          .then(() => ecrireLocalStorage([]))
+                          .catch(() => {
+                              // Échec : la liste locale est gardée, la fusion sera retentée au prochain chargement.
+                          })
+                    : Promise.resolve();
+
+            fusion
+                .then(() => api<Favori[]>("/api/favoris"))
                 .then((data) => setFavoris(data.map((f) => f.produit)))
                 .catch(() => setFavoris([]))
                 .finally(() => setLoading(false));
@@ -57,7 +73,7 @@ export function FavorisProvider({ children }: { children: ReactNode }) {
                 .catch(() => setFavoris([]))
                 .finally(() => setLoading(false));
         }
-    }, [user, authLoading]);
+    }, [connecte, authLoading]);
 
     useEffect(() => {
         charger();
@@ -72,8 +88,8 @@ export function FavorisProvider({ children }: { children: ReactNode }) {
         async (produit: Produit) => {
             const dejaFavori = favoris.some((f) => f.id === produit.id);
 
-            if (user) {
-                // Mise à jour optimiste : l'UI change tout de suite, on resynchronise seulement si l'appel échoue
+            if (connecte) {
+                // Mise à jour optimiste : l'écran change tout de suite, on resynchronise seulement si l'appel échoue.
                 if (dejaFavori) {
                     setFavoris((prev) => prev.filter((f) => f.id !== produit.id));
                     try {
@@ -98,7 +114,7 @@ export function FavorisProvider({ children }: { children: ReactNode }) {
                 );
             }
         },
-        [favoris, user, charger],
+        [favoris, connecte, charger],
     );
 
     return (

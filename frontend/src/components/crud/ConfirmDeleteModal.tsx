@@ -9,6 +9,9 @@ type ConfirmDeleteModalProps = {
     erreur: string | null;
     message: ReactNode;
     libelleConfirm?: string;
+    libelleConfirmEnCours?: string;
+    libelleRefus?: string;
+    variante?: "neutre" | "succes";
 };
 
 export default function ConfirmDeleteModal({
@@ -19,7 +22,15 @@ export default function ConfirmDeleteModal({
     erreur,
     message,
     libelleConfirm = "Supprimer",
+    libelleConfirmEnCours = "En cours...",
+    libelleRefus = "Annuler",
+    variante = "neutre",
 }: ConfirmDeleteModalProps) {
+    const classeConfirm =
+        variante === "succes"
+            ? "bg-green-600 text-white hover:bg-green-700 disabled:bg-neutral-300"
+            : "border border-black bg-white text-black hover:bg-neutral-50 disabled:text-neutral-300";
+
     return (
         <Modal open={open} onClose={onClose}>
             <div className="text-sm text-neutral-800">{message}</div>
@@ -34,15 +45,15 @@ export default function ConfirmDeleteModal({
                     onClick={onClose}
                     className="rounded-sm px-3 py-2 text-xs font-semibold text-neutral-500 hover:text-black"
                 >
-                    Annuler
+                    {libelleRefus}
                 </button>
                 <button
                     type="button"
                     onClick={onConfirm}
                     disabled={envoiEnCours}
-                    className="rounded-sm border border-black bg-white px-4 py-2 text-xs font-semibold text-black hover:bg-neutral-50 disabled:cursor-not-allowed disabled:text-neutral-300"
+                    className={`rounded-sm px-4 py-2 text-xs font-semibold disabled:cursor-not-allowed ${classeConfirm}`}
                 >
-                    {envoiEnCours ? "Suppression..." : libelleConfirm}
+                    {envoiEnCours ? libelleConfirmEnCours : libelleConfirm}
                 </button>
             </div>
         </Modal>

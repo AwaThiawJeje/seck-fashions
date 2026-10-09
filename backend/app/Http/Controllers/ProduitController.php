@@ -18,12 +18,25 @@ class ProduitController extends Controller
 
         $produits = Produit::query()
             ->when(! $rechercheParIds && ! $vueComplete, fn ($query) => $query->enVente())
+            ->when($vueComplete ? $request->etat : null, fn ($query, $etat) => match ($etat) {
+                'en_stock' => $query->enVente(),
+                // Épuisé = visible sur le site, mais plus rien en stock (même définition que le tableau de bord).
+                'epuise' => $query->where('disponible', true)
+                    ->whereNotIn('id', Produit::enVente()->select('produits.id')),
+                'masque' => $query->where('disponible', false),
+                default => $query,
+            })
             ->when($request->categorie, fn ($query, $slug) =>
-                $query->whereHas('categorie', fn ($q) => $q->where('slug', $slug))
+                $query->whereHas('categorie', fn ($categorie) =>
+                    $categorie->where(fn ($groupe) =>
+                        $groupe->where('slug', $slug)
+                            ->orWhereHas('parente', fn ($parente) => $parente->where('slug', $slug))
+                    )
+                )
             )
-            ->when($request->valeur, fn ($query, $valeur) =>
+            ->when($request->taille, fn ($query, $taille) =>
                 $query->whereHas('declinaisons', fn ($q) =>
-                    $q->where('valeur', $valeur)->where('quantite', '>', 0)
+                    $q->where('taille', $taille)->where('quantite', '>', 0)
                 )
             )
             ->when($request->recherche, fn ($query, $terme) =>
@@ -34,13 +47,15 @@ class ProduitController extends Controller
                 $query->whereIn('id', is_array($ids) ? $ids : explode(',', $ids))
             )
             ->orderByDesc('mis_en_avant')
-            ->latest()
+            ->orderByDesc('id') // départage les produits créés à la même seconde
             ->with([
                 'categorie',
                 'images' => fn ($q) => $q->orderBy('ordre'),
                 'declinaisons' => fn ($q) => $q->ordonnees(),
             ])
-            ->paginate(20);
+            ->withAvg('avisValides as note_moyenne', 'note')
+            ->withCount('avisValides as nombre_avis')
+            ->paginate($rechercheParIds ? 100 : 20);
 
         return response()->json($produits);
     }
@@ -76,6 +91,8 @@ class ProduitController extends Controller
     public function show(Produit $produit)
     {
         $produit->load(['categorie.parente', 'images', 'declinaisons']);
+        $produit->loadAvg('avisValides as note_moyenne', 'note');
+        $produit->loadCount('avisValides as nombre_avis');
 
         return response()->json($produit);
     }
@@ -97,14 +114,19 @@ class ProduitController extends Controller
 
             if (array_key_exists('declinaisons', $data)) {
                 $envoyees = collect($data['declinaisons']);
+                // (taille, couleur_nom) identifie une déclinaison de façon unique — une
+                // simple colonne ne suffit plus puisque les deux axes sont combinables.
+                $clesEnvoyees = $envoyees
+                    ->map(fn ($d) => ($d['taille'] ?? '').'|'.($d['couleur_nom'] ?? ''))
+                    ->all();
 
                 $retirees = $produit->declinaisons()
-                    ->whereNotIn('valeur', $envoyees->pluck('valeur'))
-                    ->get();
+                    ->get()
+                    ->reject(fn ($d) => in_array(($d->taille ?? '').'|'.($d->couleur_nom ?? ''), $clesEnvoyees));
 
                 foreach ($retirees as $declinaison) {
                     if ($declinaison->commandesEnAttente()->exists()) {
-                        abort(422, "Impossible de retirer \"{$declinaison->valeur}\" : cette déclinaison figure dans une commande en attente. Valide ou annule d'abord la commande, ou mets sa quantité à 0.");
+                        abort(422, "Impossible de retirer \"{$declinaison->label}\" : cette déclinaison figure dans une commande en attente. Valide ou annule d'abord la commande, ou mets sa quantité à 0.");
                     }
                 }
 
@@ -112,8 +134,8 @@ class ProduitController extends Controller
 
                 foreach ($envoyees as $declinaison) {
                     $produit->declinaisons()->updateOrCreate(
-                        ['valeur' => $declinaison['valeur']],
-                        ['quantite' => $declinaison['quantite']]
+                        ['taille' => $declinaison['taille'] ?? null, 'couleur_nom' => $declinaison['couleur_nom'] ?? null],
+                        ['quantite' => $declinaison['quantite'], 'couleur' => $declinaison['couleur'] ?? null]
                     );
                 }
             }
@@ -168,7 +190,16 @@ class ProduitController extends Controller
             ],
             'mis_en_avant' => ['boolean'],
             'declinaisons' => ['nullable', 'array'],
-            'declinaisons.*.valeur' => ['required_with:declinaisons', 'string'],
+            'declinaisons.*' => [
+                function ($attribute, $value, $fail) {
+                    if (empty($value['taille']) && empty($value['couleur_nom'])) {
+                        $fail('Chaque déclinaison doit avoir une taille, une couleur, ou les deux.');
+                    }
+                },
+            ],
+            'declinaisons.*.taille' => ['nullable', 'string', 'max:50'],
+            'declinaisons.*.couleur_nom' => ['nullable', 'string', 'max:50', 'required_with:declinaisons.*.couleur'],
+            'declinaisons.*.couleur' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'declinaisons.*.quantite' => ['required_with:declinaisons', 'integer', 'min:0'],
         ], [
             'categorie_id.required' => 'La catégorie est obligatoire.',
@@ -186,7 +217,8 @@ class ProduitController extends Controller
             'quantite.integer' => 'La quantité doit être un nombre entier.',
             'quantite.min' => 'La quantité ne peut pas être négative.',
             'reference.unique' => 'Cette référence est déjà utilisée par un autre produit.',
-            'declinaisons.*.valeur.required_with' => 'Chaque déclinaison doit avoir une valeur (pointure, taille...).',
+            'declinaisons.*.couleur_nom.required_with' => 'Donne un nom à la couleur choisie.',
+            'declinaisons.*.couleur.regex' => 'La couleur doit être un code hexadécimal valide (#RRGGBB).',
             'declinaisons.*.quantite.required_with' => 'Chaque déclinaison doit avoir une quantité.',
             'declinaisons.*.quantite.integer' => 'La quantité de la déclinaison :position doit être un nombre entier.',
             'declinaisons.*.quantite.min' => 'La quantité de la déclinaison :position ne peut pas être négative.',

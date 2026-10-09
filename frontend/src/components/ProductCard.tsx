@@ -4,6 +4,7 @@ import type { Produit } from "../types/api";
 import { useFavoris } from "../context/FavorisContext";
 import { usePanier } from "../context/PanierContext";
 import Modal from "./Modal";
+import Etoiles from "./Etoiles";
 
 type ProductCardProps = {
     product: Produit;
@@ -116,7 +117,10 @@ export default function ProductCard({ product, href = "#", confirmerRetraitFavor
                 )}
 
                 {product.en_promotion && (
-                    <div className="absolute left-2 top-2">
+                    <div className="absolute left-2 top-2 flex items-center gap-1">
+                        <span className="rounded bg-black px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white">
+                            Promotion
+                        </span>
                         <span className="rounded bg-orange-100 px-2 py-1 text-[10px] font-bold text-orange-600">
                             -{product.pourcentage_reduction}%
                         </span>
@@ -190,6 +194,13 @@ export default function ProductCard({ product, href = "#", confirmerRetraitFavor
                     )}
                 </div>
 
+                {product.nombre_avis > 0 && (
+                    <div className="flex items-center gap-1">
+                        <Etoiles valeur={Number(product.note_moyenne)} />
+                        <span className="text-[11px] text-neutral-400">({product.nombre_avis})</span>
+                    </div>
+                )}
+
                 <button
                     type="button"
                     onClick={gererAjoutPanier}
@@ -199,7 +210,7 @@ export default function ProductCard({ product, href = "#", confirmerRetraitFavor
                     }`}
                 >
                     {venantAjoute ? <CheckIcon /> : <CartIcon />}
-                    {isOut ? "Indisponible" : venantAjoute ? "Ajouté" : aDesDeclinaisons ? "Choisir une taille" : "Ajouter au panier"}
+                    {isOut ? "Indisponible" : venantAjoute ? "Ajouté" : aDesDeclinaisons ? "Choisir une option" : "Ajouter au panier"}
                 </button>
             </div>
         </div>

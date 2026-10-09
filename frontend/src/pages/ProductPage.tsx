@@ -6,7 +6,11 @@ import { usePanier } from "../context/PanierContext";
 import { useParametres } from "../hooks/useParametres";
 import { api, ApiError } from "../lib/api";
 import { construireLienWhatsapp, construireMessageCommande } from "../lib/whatsapp";
-import type { Commande } from "../types/api";
+import { ajouterProduitRecent, recupererIdsRecents } from "../lib/produitsRecents";
+import RangeeProduits from "../components/RangeeProduits";
+import Etoiles from "../components/Etoiles";
+import Drawer from "../components/Drawer";
+import type { Avis, Commande, Page, Produit } from "../types/api";
 import whatsappIcon from "../assets/whatsapp-icon.png";
 
 const CRITICAL_STOCK_THRESHOLD = 8;
@@ -23,21 +27,64 @@ export default function ProductPage() {
     const { parametres } = useParametres();
 
     const [imgIndex, setImgIndex] = useState(0);
-    const [valeurChoisie, setValeurChoisie] = useState<string | null>(null);
+    const [tailleChoisie, setTailleChoisie] = useState<string | null>(null);
+    const [couleurNomChoisie, setCouleurNomChoisie] = useState<string | null>(null);
     const [quantite, setQuantite] = useState(1);
     const [venantAjoute, setVenantAjoute] = useState(false);
     const [envoiWhatsappEnCours, setEnvoiWhatsappEnCours] = useState(false);
     const [erreurWhatsapp, setErreurWhatsapp] = useState<string | null>(null);
+    const [similaires, setSimilaires] = useState<Produit[]>([]);
+    const [recents, setRecents] = useState<Produit[]>([]);
+    const [avis, setAvis] = useState<Avis[]>([]);
+    const [panneauAvisOuvert, setPanneauAvisOuvert] = useState(false);
+    const [filtreEtoiles, setFiltreEtoiles] = useState<number | null>(null);
 
     useEffect(() => {
         setQuantite(1);
-    }, [valeurChoisie]);
+    }, [tailleChoisie, couleurNomChoisie]);
 
     useEffect(() => {
         if (!venantAjoute) return;
         const timer = setTimeout(() => setVenantAjoute(false), 1500);
         return () => clearTimeout(timer);
     }, [venantAjoute]);
+
+    const produitId = produit?.id;
+    const categorieSlug = produit?.categorie?.slug;
+
+    // Note de visite — alimente "Récemment consultés" sur les prochaines fiches produit.
+    useEffect(() => {
+        if (produitId) ajouterProduitRecent(produitId);
+    }, [produitId]);
+
+    useEffect(() => {
+        if (!categorieSlug || !produitId) return;
+        api<Page<Produit>>(`/api/produits?categorie=${categorieSlug}`)
+            .then((page) => setSimilaires(page.data.filter((p) => p.id !== produitId).slice(0, 8)))
+            .catch(() => setSimilaires([]));
+    }, [categorieSlug, produitId]);
+
+    useEffect(() => {
+        if (!produitId) return;
+        api<Avis[]>(`/api/produits/${produitId}/avis`)
+            .then(setAvis)
+            .catch(() => setAvis([]));
+    }, [produitId]);
+
+    useEffect(() => {
+        if (!produitId) return;
+        const ids = recupererIdsRecents().filter((id) => id !== produitId);
+        if (ids.length === 0) {
+            setRecents([]);
+            return;
+        }
+        api<Page<Produit>>(`/api/produits?ids=${ids.join(",")}`)
+            .then((page) => {
+                const parId = new Map(page.data.map((p) => [p.id, p]));
+                setRecents(ids.map((id) => parId.get(id)).filter((p): p is Produit => !!p));
+            })
+            .catch(() => setRecents([]));
+    }, [produitId]);
 
     if (loading) {
         return <p className="py-16 text-center text-sm text-neutral-500">Chargement...</p>;
@@ -48,8 +95,45 @@ export default function ProductPage() {
 
     const favori = estFavori(produit.id);
     const imageUrls = produit.images?.map((img) => img.url) ?? [];
-    const aDesDeclinaisons = !!produit.declinaisons && produit.declinaisons.length > 0;
-    const declinaisonChoisie = produit.declinaisons?.find((d) => d.valeur === valeurChoisie) ?? null;
+    const declinaisons = produit.declinaisons ?? [];
+    const aDesDeclinaisons = declinaisons.length > 0;
+    const aDesTailles = declinaisons.some((d) => d.taille);
+    const aDesCouleurs = declinaisons.some((d) => d.couleur_nom);
+
+    const taillesDisponibles = Array.from(
+        new Set(declinaisons.filter((d) => d.taille).map((d) => d.taille as string))
+    );
+    const couleursDisponibles = Array.from(
+        new Map(
+            declinaisons
+                .filter((d) => d.couleur_nom)
+                .map((d) => [d.couleur_nom as string, { nom: d.couleur_nom as string, hex: d.couleur }])
+        ).values()
+    );
+
+    // Une taille (ou couleur) reste cliquable tant qu'il existe, pour la sélection
+    // actuelle de l'autre axe, au moins une combinaison en stock.
+    const tailleDisponible = (taille: string) =>
+        declinaisons.some(
+            (d) =>
+                d.taille === taille &&
+                (!aDesCouleurs || couleurNomChoisie === null || d.couleur_nom === couleurNomChoisie) &&
+                d.quantite > 0
+        );
+    const couleurDisponible = (nom: string) =>
+        declinaisons.some(
+            (d) =>
+                d.couleur_nom === nom &&
+                (!aDesTailles || tailleChoisie === null || d.taille === tailleChoisie) &&
+                d.quantite > 0
+        );
+
+    const declinaisonChoisie =
+        declinaisons.find(
+            (d) =>
+                (!aDesTailles || (tailleChoisie !== null && d.taille === tailleChoisie)) &&
+                (!aDesCouleurs || (couleurNomChoisie !== null && d.couleur_nom === couleurNomChoisie))
+        ) ?? null;
 
     const stockPertinent = aDesDeclinaisons
         ? (declinaisonChoisie?.quantite ?? null)
@@ -184,6 +268,15 @@ export default function ProductPage() {
                 <div className="flex flex-col gap-4">
                     <h1 className="text-xl font-bold uppercase tracking-wide">{produit.nom}</h1>
 
+                    {produit.nombre_avis > 0 && (
+                        <div className="-mt-3 flex items-center gap-1.5">
+                            <Etoiles valeur={Number(produit.note_moyenne)} taille="md" />
+                            <span className="text-xs text-neutral-500">
+                                {Number(produit.note_moyenne).toFixed(1)} · {produit.nombre_avis} avis
+                            </span>
+                        </div>
+                    )}
+
                     <div className="flex flex-wrap items-baseline gap-2">
                         {produit.en_promotion ? (
                             <>
@@ -202,28 +295,66 @@ export default function ProductPage() {
                         <p className={`text-sm font-semibold ${messageStock.classe}`}>{messageStock.texte}</p>
                     )}
 
-                    {aDesDeclinaisons && (
+                    {aDesCouleurs && (
+                        <div>
+                            <p className="mb-2 text-sm font-semibold text-neutral-800">
+                                Couleur{couleurNomChoisie ? ` — ${couleurNomChoisie}` : ""}
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                                {couleursDisponibles.map(({ nom, hex }) => {
+                                    const dispo = couleurDisponible(nom);
+                                    const selectionne = nom === couleurNomChoisie;
+                                    return (
+                                        <button
+                                            key={nom}
+                                            type="button"
+                                            disabled={!dispo}
+                                            onClick={() => setCouleurNomChoisie(selectionne ? null : nom)}
+                                            title={nom}
+                                            aria-label={nom}
+                                            className={`relative h-9 w-9 shrink-0 rounded-sm border-2 transition-all ${
+                                                !dispo
+                                                    ? "cursor-not-allowed opacity-30"
+                                                    : selectionne
+                                                        ? "border-black"
+                                                        : "border-neutral-300 hover:border-black"
+                                            }`}
+                                            style={{ backgroundColor: hex ?? undefined }}
+                                        >
+                                            {!dispo && (
+                                                <span className="absolute inset-0 flex items-center justify-center">
+                                                    <span className="h-px w-6 rotate-45 bg-neutral-500" />
+                                                </span>
+                                            )}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+
+                    {aDesTailles && (
                         <div>
                             <p className="mb-2 text-sm font-semibold text-neutral-800">Taille / Pointure</p>
                             <div className="flex flex-wrap gap-2">
-                                {produit.declinaisons!.map((d) => {
-                                    const epuise = d.quantite === 0;
-                                    const selectionne = d.valeur === valeurChoisie;
+                                {taillesDisponibles.map((taille) => {
+                                    const dispo = tailleDisponible(taille);
+                                    const selectionne = taille === tailleChoisie;
                                     return (
                                         <button
-                                            key={d.id}
+                                            key={taille}
                                             type="button"
-                                            disabled={epuise}
-                                            onClick={() => setValeurChoisie(d.valeur)}
+                                            disabled={!dispo}
+                                            onClick={() => setTailleChoisie(selectionne ? null : taille)}
                                             className={`min-w-11 rounded-sm border px-3 py-2 text-sm font-medium transition-colors ${
-                                                epuise
+                                                !dispo
                                                     ? "cursor-not-allowed border-neutral-200 text-neutral-300 line-through"
                                                     : selectionne
                                                         ? "border-black bg-black text-white"
                                                         : "border-neutral-300 text-neutral-800 hover:border-black"
                                             }`}
                                         >
-                                            {d.valeur}
+                                            {taille}
                                         </button>
                                     );
                                 })}
@@ -267,7 +398,9 @@ export default function ProductPage() {
                             {!produit.disponible || stockPertinent === 0
                                 ? "Indisponible"
                                 : aDesDeclinaisons && !declinaisonChoisie
-                                    ? "Sélectionnez votre taille"
+                                    ? aDesTailles && !tailleChoisie
+                                        ? "Sélectionnez votre taille"
+                                        : "Sélectionnez votre couleur"
                                     : venantAjoute
                                         ? "Ajouté au panier"
                                         : "Ajouter au panier"}
@@ -305,6 +438,87 @@ export default function ProductPage() {
                     )}
                 </div>
             </div>
+
+            {avis.length > 0 && (
+                <div className="mt-10 border-t border-neutral-200 pt-6">
+                    <div className="mb-3 flex items-center gap-3">
+                        <h2 className="text-sm font-bold uppercase tracking-wide text-neutral-800">
+                            Avis clients ({avis.length})
+                        </h2>
+                        {avis.length > 2 && (
+                            <button
+                                type="button"
+                                onClick={() => setPanneauAvisOuvert(true)}
+                                className="text-xs font-semibold text-blue-600 underline hover:text-blue-800"
+                            >
+                                Voir plus
+                            </button>
+                        )}
+                    </div>
+                    <div className="flex flex-col gap-4">
+                        {[...avis]
+                            .sort((a, b) => b.note - a.note)
+                            .slice(0, 2)
+                            .map((a) => (
+                                <CarteAvis key={a.id} avis={a} />
+                            ))}
+                    </div>
+                </div>
+            )}
+
+            <Drawer open={panneauAvisOuvert} onClose={() => setPanneauAvisOuvert(false)} titre={`Avis clients (${avis.length})`}>
+                <div className="mb-4 flex flex-wrap gap-1.5">
+                    <button
+                        type="button"
+                        onClick={() => setFiltreEtoiles(null)}
+                        className={`rounded-sm px-3 py-1.5 text-xs font-semibold transition-colors ${
+                            filtreEtoiles === null ? "bg-black text-white" : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
+                        }`}
+                    >
+                        Tous
+                    </button>
+                    {[5, 4, 3, 2, 1].map((n) => (
+                        <button
+                            key={n}
+                            type="button"
+                            onClick={() => setFiltreEtoiles(n)}
+                            className={`flex items-center gap-1 rounded-sm px-3 py-1.5 text-xs font-semibold transition-colors ${
+                                filtreEtoiles === n ? "bg-black text-white" : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
+                            }`}
+                        >
+                            {n} ★
+                        </button>
+                    ))}
+                </div>
+
+                <div className="flex flex-col gap-4">
+                    {avis
+                        .filter((a) => filtreEtoiles === null || a.note === filtreEtoiles)
+                        .map((a) => (
+                            <CarteAvis key={a.id} avis={a} />
+                        ))}
+                    {avis.filter((a) => filtreEtoiles === null || a.note === filtreEtoiles).length === 0 && (
+                        <p className="text-sm text-neutral-500">Aucun avis avec cette note.</p>
+                    )}
+                </div>
+            </Drawer>
+
+            <div className="mt-10 flex flex-col gap-8">
+                <RangeeProduits titre="Produits similaires" produits={similaires} />
+                <RangeeProduits titre="Récemment consultés" produits={recents} />
+            </div>
+        </div>
+    );
+}
+
+function CarteAvis({ avis }: { avis: Avis }) {
+    return (
+        <div className="rounded-md border border-neutral-200 p-3">
+            <div className="mb-1 flex items-center justify-between gap-2">
+                <span className="text-sm font-semibold text-neutral-800">{avis.user?.name ?? "Client"}</span>
+                <Etoiles valeur={avis.note} />
+            </div>
+            {avis.commentaire && <p className="text-sm text-neutral-600">{avis.commentaire}</p>}
         </div>
     );
 }

@@ -5,10 +5,28 @@ namespace App\Http\Controllers;
 use App\Models\ImageProduit;
 use App\Models\Produit;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Intervention\Image\ImageManager;
 
 class ImageProduitController extends Controller
 {
+    /**
+     * Convertit l'image envoyée en WebP avant de la stocker — quel que soit le format
+     * d'origine (jpg, png...), on ne garde que du WebP sur le disque : fichiers plus
+     * légers, chargement plus rapide du catalogue, sans rien demander à l'admin.
+     */
+    private function convertirEtStocker(UploadedFile $fichier, string $dossier): string
+    {
+        $image = ImageManager::gd()->read($fichier);
+        $chemin = "{$dossier}/" . Str::random(40) . '.webp';
+
+        Storage::disk('public')->put($chemin, (string) $image->toWebp(82));
+
+        return $chemin;
+    }
+
     public function index(Produit $produit)
     {
         return response()->json(
@@ -33,7 +51,7 @@ class ImageProduitController extends Controller
         $prochainOrdre = ($produit->images()->max('ordre') ?? -1) + 1;
 
         $images = collect($data['images'])->map(function ($fichier, $index) use ($produit, $prochainOrdre) {
-            $chemin = $fichier->store("produits/{$produit->id}", 'public');
+            $chemin = $this->convertirEtStocker($fichier, "produits/{$produit->id}");
 
             return $produit->images()->create([
                 'chemin' => $chemin,
@@ -63,7 +81,7 @@ class ImageProduitController extends Controller
         Storage::disk('public')->delete($image->chemin);
 
         $image->update([
-            'chemin' => $data['image']->store("produits/{$image->produit_id}", 'public'),
+            'chemin' => $this->convertirEtStocker($data['image'], "produits/{$image->produit_id}"),
         ]);
 
         return response()->json($image->fresh());

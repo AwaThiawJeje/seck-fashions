@@ -15,13 +15,17 @@ export function construireMessageCommande(commande: Commande): string {
         return `• ${l.nom_produit}${taille} x${l.quantite} — ${formatPrice(Number(l.sous_total))}`;
     });
 
+    const lienAdmin = `${window.location.origin}/admin/commandes?commande=${commande.id}`;
+
     return [
-        `Bonjour, je souhaite commander (réf. #${commande.id}) :`,
+        `Bonjour, je souhaite commander (commande N° ${commande.numero}) :`,
         "",
         ...lignes,
         "",
         `Total : ${formatPrice(Number(commande.total))}`,
         "",
         "Merci de me confirmer la disponibilité.",
+        "",
+        `Lien de gestion (vendeur) : ${lienAdmin}`,
     ].join("\n");
 }

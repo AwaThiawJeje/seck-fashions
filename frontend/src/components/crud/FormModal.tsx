@@ -25,7 +25,7 @@ export default function FormModal({
     children,
 }: FormModalProps) {
     return (
-        <Modal open={open} onClose={onClose}>
+        <Modal open={open} onClose={onClose} fermerSurFond={false}>
             <form onSubmit={onSubmit}>
                 <h2 className="mb-4 text-sm font-bold uppercase tracking-wide">{titre}</h2>
 

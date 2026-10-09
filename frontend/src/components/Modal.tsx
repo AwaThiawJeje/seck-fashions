@@ -4,17 +4,19 @@ import type { ReactNode } from "react";
 type ModalProps = {
     open: boolean;
     onClose: () => void;
+    /** Faux pour les formulaires : un clic à côté ne doit pas faire perdre la saisie. */
+    fermerSurFond?: boolean;
     children: ReactNode;
 };
 
-export default function Modal({ open, onClose, children }: ModalProps) {
+export default function Modal({ open, onClose, fermerSurFond = true, children }: ModalProps) {
     useEffect(() => {
         if (!open) return;
         const onKeyDown = (e: KeyboardEvent) => {
             if (e.key === "Escape") onClose();
         };
         document.addEventListener("keydown", onKeyDown);
-        document.body.style.overflow = "hidden"; // empêche la page de défiler derrière
+        document.body.style.overflow = "hidden";
         return () => {
             document.removeEventListener("keydown", onKeyDown);
             document.body.style.overflow = "";
@@ -25,7 +27,7 @@ export default function Modal({ open, onClose, children }: ModalProps) {
 
     return (
         <div
-            onClick={onClose}
+            onClick={fermerSurFond ? onClose : undefined}
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
         >
             <div

@@ -12,28 +12,16 @@ class DeclinaisonProduitController extends Controller
     public function index(Produit $produit)
     {
         return response()->json(
-            $produit->declinaisons()->orderBy('valeur')->get()
+            $produit->declinaisons()->ordonnees()->get()
         );
     }
 
     public function store(Request $request, Produit $produit)
     {
-        $data = $request->validate([
-            'valeur' => [
-                'required', 'string',
-                Rule::unique('declinaisons_produits', 'valeur')
-                    ->where('produit_id', $produit->id),
-            ],
-            'quantite' => ['required', 'integer', 'min:0'],
-        ], [
-            'valeur.required' => 'La valeur (pointure, taille...) est obligatoire.',
-            'valeur.unique' => 'Cette valeur existe déjà pour ce produit.',
-            'quantite.required' => 'La quantité est obligatoire.',
-            'quantite.integer' => 'La quantité doit être un nombre entier.',
-            'quantite.min' => 'La quantité ne peut pas être négative.',
-        ]);
+        $data = $this->validated($request, $produit);
 
         $declinaison = $produit->declinaisons()->create($data);
+        $produit->touch(); // déclenche la diffusion temps réel (stock changé)
 
         return response()->json($declinaison, 201);
     }
@@ -45,23 +33,10 @@ class DeclinaisonProduitController extends Controller
 
     public function update(Request $request, DeclinaisonProduit $declinaison)
     {
-        $data = $request->validate([
-            'valeur' => [
-                'sometimes', 'required', 'string',
-                Rule::unique('declinaisons_produits', 'valeur')
-                    ->where('produit_id', $declinaison->produit_id)
-                    ->ignore($declinaison->id),
-            ],
-            'quantite' => ['sometimes', 'required', 'integer', 'min:0'],
-        ], [
-            'valeur.required' => 'La valeur (pointure, taille...) est obligatoire.',
-            'valeur.unique' => 'Cette valeur existe déjà pour ce produit.',
-            'quantite.required' => 'La quantité est obligatoire.',
-            'quantite.integer' => 'La quantité doit être un nombre entier.',
-            'quantite.min' => 'La quantité ne peut pas être négative.',
-        ]);
+        $data = $this->validated($request, $declinaison->produit, $declinaison);
 
         $declinaison->update($data);
+        $declinaison->produit->touch(); // déclenche la diffusion temps réel (stock changé)
 
         return response()->json($declinaison->fresh());
     }
@@ -76,8 +51,32 @@ class DeclinaisonProduitController extends Controller
             ], 422);
         }
 
+        $declinaison->produit->touch(); // déclenche la diffusion temps réel (stock changé)
         $declinaison->delete();
 
         return response()->json(null, 204);
+    }
+
+    private function validated(Request $request, Produit $produit, ?DeclinaisonProduit $declinaison = null): array
+    {
+        return $request->validate([
+            'taille' => [
+                'nullable', 'string', 'max:50',
+                Rule::unique('declinaisons_produits', 'taille')
+                    ->where('produit_id', $produit->id)
+                    ->where('couleur_nom', $request->input('couleur_nom'))
+                    ->ignore($declinaison?->id),
+            ],
+            'couleur_nom' => ['nullable', 'string', 'max:50', 'required_with:couleur'],
+            'couleur' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'quantite' => ['required', 'integer', 'min:0'],
+        ], [
+            'taille.unique' => 'Cette déclinaison existe déjà pour ce produit.',
+            'couleur_nom.required_with' => 'Donne un nom à la couleur choisie.',
+            'couleur.regex' => 'La couleur doit être un code hexadécimal valide (#RRGGBB).',
+            'quantite.required' => 'La quantité est obligatoire.',
+            'quantite.integer' => 'La quantité doit être un nombre entier.',
+            'quantite.min' => 'La quantité ne peut pas être négative.',
+        ]);
     }
 }

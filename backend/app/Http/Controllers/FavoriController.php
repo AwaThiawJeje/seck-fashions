@@ -12,10 +12,37 @@ class FavoriController extends Controller
     {
         $favoris = $request->user()
             ->favoris()
-            ->with(['produit.categorie', 'produit.images' => fn ($q) => $q->orderBy('ordre')])
+            ->with([
+                'produit.categorie',
+                'produit.images' => fn ($q) => $q->orderBy('ordre'),
+                'produit.declinaisons' => fn ($q) => $q->ordonnees(),
+            ])
+            ->orderBy('id')
             ->get();
 
         return response()->json($favoris);
+    }
+
+    public function sync(Request $request)
+    {
+        $data = $request->validate([
+            'produit_ids' => ['required', 'array', 'max:200'],
+            'produit_ids.*' => ['integer'],
+        ], [
+            'produit_ids.required' => 'La liste des produits à synchroniser est obligatoire.',
+        ]);
+
+        // Un produit supprimé depuis est simplement ignoré, au lieu de tout faire échouer.
+        $ids = Produit::whereIn('id', $data['produit_ids'])->pluck('id');
+
+        foreach ($ids as $produitId) {
+            Favori::firstOrCreate([
+                'user_id' => $request->user()->id,
+                'produit_id' => $produitId,
+            ]);
+        }
+
+        return response()->json($request->user()->favoris()->with('produit')->get());
     }
 
     public function store(Request $request)
@@ -33,28 +60,6 @@ class FavoriController extends Controller
         ]);
 
         return response()->json($favori->load('produit'), 201);
-    }
-
-    public function sync(Request $request)
-    {
-        $data = $request->validate([
-            'produit_ids' => ['required', 'array'],
-            'produit_ids.*' => ['integer', 'exists:produits,id'],
-        ], [
-            'produit_ids.required' => 'La liste des produits à synchroniser est obligatoire.',
-            'produit_ids.*.exists' => "Le produit en position :position n'existe pas.",
-        ]);
-
-        foreach ($data['produit_ids'] as $produitId) {
-            Favori::firstOrCreate([
-                'user_id' => $request->user()->id,
-                'produit_id' => $produitId,
-            ]);
-        }
-
-        return response()->json(
-            $request->user()->favoris()->with('produit')->get()
-        );
     }
 
     public function destroy(Request $request, Produit $produit)

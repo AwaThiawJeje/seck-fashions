@@ -40,4 +40,14 @@ class User extends Authenticatable
     {
         return $this->hasMany(Favori::class);
     }
+
+    public function panierLignes()
+    {
+        return $this->hasMany(PanierLigne::class);
+    }
+
+    public function avis()
+    {
+        return $this->hasMany(Avis::class);
+    }
 }
